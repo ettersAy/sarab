@@ -1,6 +1,6 @@
 import type { Response } from "express";
 import type { QueueManager } from "./manager.js";
-import type { Job, QueueStats } from "./types.js";
+import type { Job } from "./types.js";
 import type { JobStore } from "../storage/jobs.js";
 
 interface SSEClient {

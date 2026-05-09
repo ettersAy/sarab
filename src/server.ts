@@ -11,7 +11,7 @@ import { ProjectStore } from "./storage/projects.js";
 import { SessionStore } from "./storage/sessions.js";
 import { SettingsStore } from "./storage/settings.js";
 import { ClaudeExecutor } from "./executor/claude.js";
-import { DeepSeekExecutor } from "./executor/deepseek.js";
+import { createExecutor } from "./executor/factory.js";
 import type { Executor } from "./executor/types.js";
 import { QueueManager } from "./queue/manager.js";
 import { SSEManager } from "./queue/sse.js";
@@ -29,10 +29,21 @@ const projectStore = new ProjectStore(config.dataDir);
 const sessionStore = new SessionStore(config.dataDir);
 const settingsStore = new SettingsStore(config.dataDir);
 
-// Executor
-const executor = new ClaudeExecutor(config.claudeCmd, config.claudeFlags);
-const deepseekApiKey = process.env.ANTHROPIC_AUTH_TOKEN || process.env.DEEPSEEK_API_KEY || "";
-const deepseekExecutor = deepseekApiKey ? new DeepSeekExecutor(deepseekApiKey) : null;
+// Executor — use settings when available, fall back to env config
+const settings = settingsStore.load();
+const defaultProvider = settings.providers.find((p) => p.isDefault) ?? settings.providers[0];
+const executor = defaultProvider
+  ? createExecutor(defaultProvider)
+  : new ClaudeExecutor(config.claudeCmd, config.claudeFlags);
+
+// Prompt improvement executor from settings
+const piProviderId = settings.promptImprovement?.providerId;
+const piProvider = piProviderId
+  ? settings.providers.find((p) => p.id === piProviderId)
+  : defaultProvider;
+const promptExecutor: Executor | undefined = piProvider
+  ? createExecutor(piProvider)
+  : executor;
 
 // Queue
 const queueManager = new QueueManager(jobStore, logStore, executor, config.pollIntervalMs, sessionStore, projectStore);
@@ -49,7 +60,6 @@ const webDir = join(__dirname, "web");
 app.use(express.static(webDir));
 
 // API routes
-const promptExecutor: Executor = deepseekExecutor ?? executor;
 app.use("/api", createApiRouter(jobStore, logStore, queueManager, executor, projectStore, sessionStore, settingsStore, promptExecutor));
 
 // SSE endpoint

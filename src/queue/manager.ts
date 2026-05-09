@@ -1,4 +1,4 @@
-import type { Job, JobStatus, SessionMode } from "./types.js";
+import type { Job } from "./types.js";
 import type { JobStore } from "../storage/jobs.js";
 import type { LogStore } from "../storage/logs.js";
 import type { SessionStore } from "../storage/sessions.js";

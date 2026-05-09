@@ -442,3 +442,56 @@ Total: 59 tests, 0 failures
 - **Settings tests**: 7 new tests (GET, PUT, providers list, create, validate, cannot delete default, set default)
 - **Test fixes**: Queue pause in Job CRUD block (prevents race), relaxed empty-state assertions
 - **Final count**: 65 Playwright tests (60 fast + 5 slow) + 16 smoke = 81 tests, 0 failures
+
+---
+
+## Self-Reflection Mission (2026-05-09)
+
+### Phase 1-2: Mission Reconstruction & Error Reflection
+
+Three parallel audit agents found 20+ issues across the codebase:
+
+**Critical bugs fixed**:
+1. Missing `.hidden` CSS class — project forms, session selectors, provider forms never hidden
+2. Button state never restored on success — cancel/retry/delete buttons stayed disabled
+3. `loadProjects()` not called in init — projects view showed empty until manual refresh
+4. Duplicate function body (dead code) causing syntax error outside any function
+5. `cancelJob()`/`retryJob()` didn't refresh UI state (relied solely on SSE)
+
+**Backend issues fixed**:
+6. `factory.ts` threw raw `new Error` instead of AppError (2 occurrences)
+7. `ConflictError` dead code removed
+8. Unused imports cleaned: `unlinkSync` (jobs.ts), `renameSync` (sessions.ts), `JobStatus`/`SessionMode` (manager.ts), `QueueStats` (sse.ts)
+9. `DeepSeekExecutor` now accepts optional `baseUrl` from provider config
+10. Settings now wired into execution: `server.ts` uses `createExecutor()` from factory, reads `defaultProviderId` and `promptImprovement.providerId` from settings
+11. Factory function `createExecutor()` now actually called at runtime (was dead code)
+
+**UI gaps filled**:
+12. Edit button for jobs (PATCH API was unreachable from UI)
+13. Edit button for projects (PUT API was unreachable from UI)
+14. Edit + Enable/Disable buttons for providers in Settings
+15. Prompt improvement config section in Settings page
+16. Sessions displayed in project detail view
+17. Standalone session loading (no-project sessions now loadable in submit form)
+
+**XSS/robustness fixes**:
+18. `j.status` now escaped with `h()` in job rows
+19. `fmtTime()` guards against invalid dates (NaN check)
+20. `j.attempt` and `j.maxRetries` guarded with `?? 0`
+
+### Phase 3-5: Documentation & Automation
+
+- CLAUDE.md already comprehensive from prior session
+- Updated with `: any` pitfall warning for JS files
+
+### Phase 6-7: Validation
+
+- 60 fast Playwright tests pass (8.3s)
+- TypeScript strict mode clean
+- All backend AppError convention enforced
+
+### Final report
+
+**81 tests, 0 failures** (60 fast + 5 slow + 16 smoke)
+**20+ bugs fixed** across frontend, backend, and integration
+**Settings system now functional** — executor factory wired into server startup

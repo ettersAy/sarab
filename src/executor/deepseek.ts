@@ -3,8 +3,11 @@ import type { Executor, ExecutorInput, ExecutorOutput } from "./types.js";
 export class DeepSeekExecutor implements Executor {
   private readonly baseUrl: string;
 
-  constructor(private readonly apiKey: string) {
-    this.baseUrl = "https://api.deepseek.com/v1";
+  constructor(
+    private readonly apiKey: string,
+    baseUrl?: string,
+  ) {
+    this.baseUrl = baseUrl || "https://api.deepseek.com/v1";
   }
 
   async execute(input: ExecutorInput): Promise<ExecutorOutput> {

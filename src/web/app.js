@@ -155,6 +155,7 @@ function renderProjects() {
         </div>
         <div class="project-card-actions">
           <button class="btn btn-sm" data-action="view-project" data-id="${p.id}">View</button>
+          <button class="btn btn-sm" data-action="edit-project" data-id="${p.id}">Edit</button>
           <button class="btn btn-danger btn-sm" data-action="delete-project" data-id="${p.id}">Delete</button>
         </div>
       </div>`).join("")
@@ -184,6 +185,9 @@ function renderProjects() {
       currentView = "project-detail";
       renderView();
     });
+  });
+  document.querySelectorAll("[data-action=edit-project]").forEach((btn) => {
+    btn.addEventListener("click", () => showEditProjectForm(btn.dataset.id));
   });
   document.querySelectorAll("[data-action=delete-project]").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -231,6 +235,44 @@ function showProjectForm() {
   });
 }
 
+function showEditProjectForm(id) {
+  const p = projects.find((x) => x.id === id);
+  if (!p) { showToast("Project not found", "error"); return; }
+  const form = document.getElementById("project-form");
+  form.classList.remove("hidden");
+  form.innerHTML = `
+    <div class="form-container">
+      <h3>Edit Project</h3>
+      <div class="form-group">
+        <label>Project Name</label>
+        <input id="f-edit-project-name" type="text" value="${h(p.name)}" required maxlength="100">
+      </div>
+      <div class="form-group">
+        <label>Root Path</label>
+        <input id="f-edit-project-path" type="text" value="${h(p.rootPath)}" required>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary btn-sm" id="btn-save-edit-project">Save</button>
+        <button class="btn btn-sm" id="btn-cancel-edit-project">Cancel</button>
+      </div>
+    </div>`;
+
+  document.getElementById("btn-save-edit-project")?.addEventListener("click", async () => {
+    const name = document.getElementById("f-edit-project-name").value.trim();
+    const rootPath = document.getElementById("f-edit-project-path").value.trim();
+    if (!name || !rootPath) { showToast("Name and root path are required", "error"); return; }
+    try {
+      await api("PUT", `/api/projects/${id}`, { name, rootPath });
+      await loadProjects();
+      renderProjects();
+      showToast("Project updated", "success");
+    } catch (err) { showToast(err.message, "error"); }
+  });
+  document.getElementById("btn-cancel-edit-project")?.addEventListener("click", () => {
+    form.classList.add("hidden");
+  });
+}
+
 function renderProjectDetail() {
   const p = projects.find((x) => x.id === currentProjectId);
   if (!p) { $main.innerHTML = "<p>Project not found</p>"; return; }
@@ -252,7 +294,22 @@ function renderProjectDetail() {
       </div>
       <h3 style="margin-bottom:8px">Prompts (${projectJobs.length})</h3>
       ${renderJobTable(projectJobs)}
+      <div id="project-sessions" style="margin-top:24px"><em style="color:var(--text-dim)">Loading sessions...</em></div>
     </div>`;
+
+  // Load sessions for this project
+  (async () => {
+    try {
+      const projSessions = await api("GET", `/api/projects/${p.id}/sessions`);
+      const el = document.getElementById("project-sessions");
+      if (el) {
+        el.innerHTML = projSessions.length
+          ? `<h3 style="margin-bottom:8px">Sessions (${projSessions.length})</h3>
+             <div style="font-size:12px;font-family:var(--mono)">${projSessions.map((s) => `<div style="margin-bottom:4px;color:var(--text-dim)">${h(s.sessionId)} &middot; ${fmtTime(s.createdAt)}</div>`).join("")}</div>`
+          : `<h3 style="margin-bottom:8px">Sessions (0)</h3><p style="color:var(--text-dim);font-size:12px">No sessions recorded yet.</p>`;
+      }
+    } catch (_) {}
+  })();
 
   document.getElementById("btn-back-projects")?.addEventListener("click", () => {
     currentView = "projects";
@@ -349,8 +406,8 @@ function renderJobRow(j) {
         ${h(j.title)}
         ${tagsHtml ? `<div style="margin-top:2px">${tagsHtml}</div>` : ""}
       </td>
-      <td><span class="status-badge ${j.status}">${j.status}</span></td>
-      <td>${j.attempt + 1}</td>
+      <td><span class="status-badge ${h(j.status)}">${h(j.status)}</span></td>
+      <td>${(j.attempt ?? 0) + 1}</td>
       <td class="job-time">${time}</td>
       <td>
         <div class="btn-group">
@@ -358,6 +415,7 @@ function renderJobRow(j) {
           ${j.status === "pending" ? `<button class="btn btn-danger btn-sm" data-action="cancel" data-id="${j.id}">Cancel</button>` : ""}
           ${j.status === "completed" || j.status === "failed" ? `<button class="btn btn-sm" data-action="retry" data-id="${j.id}">Retry</button>` : ""}
           ${j.status === "completed" || j.status === "failed" ? `<button class="btn btn-sm" data-action="log" data-id="${j.id}">Log</button>` : ""}
+          ${j.status !== "running" && j.status !== "retrying" ? `<button class="btn btn-sm" data-action="edit" data-id="${j.id}">Edit</button>` : ""}
           ${j.status !== "running" && j.status !== "retrying" ? `<button class="btn btn-sm" data-action="duplicate" data-id="${j.id}">Dup</button>` : ""}
           ${j.status !== "running" && j.status !== "retrying" ? `<button class="btn btn-danger btn-sm" data-action="delete" data-id="${j.id}">Del</button>` : ""}
         </div>
@@ -374,6 +432,7 @@ function bindJobActions() {
       if (action === "log") { viewLog(id); return; }
       if (action === "detail") { viewDetail(id); return; }
       if (action === "duplicate") { duplicateJob(id); return; }
+      if (action === "edit") { showEditJobForm(id); return; }
 
       const origText = btn.textContent;
       btn.disabled = true;
@@ -384,6 +443,7 @@ function bindJobActions() {
         else if (action === "delete") await deleteJob(id);
       } catch (err) {
         if (err.message !== "Cancelled") showToast(err.message, "error");
+      } finally {
         btn.disabled = false;
         btn.textContent = origText;
       }
@@ -497,15 +557,16 @@ function renderSubmit() {
     }
   });
 
-  // Load sessions if project is pre-selected
-  if (currentProjectId) loadSessionsForProject(currentProjectId);
+  // Load sessions for current project (or standalone)
+  loadSessionsForProject(currentProjectId);
 }
 
 async function loadSessionsForProject(projectId) {
   const sel = document.getElementById("f-session-id");
   if (!sel) return;
+  const qs = projectId ? `?projectId=${projectId}` : "";
   try {
-    sessions = await api("GET", `/api/sessions?projectId=${projectId}`);
+    sessions = await api("GET", `/api/sessions${qs}`);
     sel.innerHTML = sessions.length
       ? sessions.map((s) => `<option value="${s.sessionId}">${s.sessionId} (${fmtTime(s.createdAt)})</option>`).join("")
       : `<option value="">No sessions yet</option>`;
@@ -513,7 +574,6 @@ async function loadSessionsForProject(projectId) {
     sel.innerHTML = `<option value="">Error loading sessions</option>`;
   }
 }
-
 async function handlePromptAction(e) {
   const btn = e.target.closest(".action-btn");
   if (!btn || btn.disabled) return;
@@ -620,10 +680,14 @@ async function loadJobs() {
 
 async function cancelJob(id) {
   await api("POST", `/api/jobs/${id}/cancel`);
+  await loadJobs();
+  updateView();
 }
 
 async function retryJob(id) {
   await api("POST", `/api/jobs/${id}/retry`);
+  await loadJobs();
+  updateView();
 }
 
 async function deleteJob(id) {
@@ -679,7 +743,7 @@ async function viewDetail(id) {
     <strong>Model:</strong> ${job.model || "default"}
     <strong>Project:</strong> ${project ? h(project.name) : "none"}
     <strong>Session:</strong> ${job.sessionId || "none"} (${job.sessionMode || "new"})
-    <strong>Attempt:</strong> ${job.attempt + 1} / ${job.maxRetries + 1}
+    <strong>Attempt:</strong> ${(job.attempt ?? 0) + 1} / ${(job.maxRetries ?? 0) + 1}
     <strong>Tags:</strong> ${job.tags?.length ? job.tags.map((t) => h(t)).join(", ") : "none"}
     <strong>Created:</strong> ${fmtTime(job.createdAt)}
     <strong>Started:</strong> ${fmtTime(job.startedAt)}
@@ -701,7 +765,69 @@ async function duplicateJob(id) {
   } catch (err) { showToast(err.message, "error"); }
 }
 
-// ── Log modal ───────────────────────────────────────────────────────
+function showEditJobForm(id) {
+  const job = jobs.find((j) => j.id === id);
+  if (!job) { showToast("Job not found", "error"); return; }
+  const modelOpts = MODELS.map((m) => `<option value="${m}" ${job.model === m ? "selected" : ""}>${m}</option>`).join("");
+
+  $main.innerHTML = `
+    <div class="view active" id="view-edit-job">
+      <div class="form-container">
+        <h2>Edit Prompt — ${h(job.id)}</h2>
+        <div class="form-group">
+          <label>Title</label>
+          <input id="e-title" type="text" value="${h(job.title)}" maxlength="200">
+        </div>
+        <div class="form-group">
+          <label>Prompt</label>
+          <textarea id="e-prompt" style="min-height:160px;font-family:var(--mono);font-size:12px">${h(job.prompt)}</textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Model</label>
+            <select id="e-model"><option value="">Default</option>${modelOpts}</select>
+          </div>
+          <div class="form-group">
+            <label>Tags</label>
+            <input id="e-tags" type="text" value="${h((job.tags || []).join(", "))}">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Timeout (ms)</label>
+            <input id="e-timeout" type="number" value="${job.timeoutMs}" min="10000" step="10000">
+          </div>
+          <div class="form-group">
+            <label>Max Retries</label>
+            <input id="e-retries" type="number" value="${job.maxRetries}" min="0" max="10">
+          </div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-primary btn-sm" id="btn-save-edit">Save</button>
+          <button class="btn btn-sm" id="btn-cancel-edit">Cancel</button>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById("btn-save-edit")?.addEventListener("click", async () => {
+    try {
+      const tags = document.getElementById("e-tags").value.split(",").map((t) => t.trim()).filter(Boolean);
+      await api("PATCH", `/api/jobs/${id}`, {
+        title: document.getElementById("e-title").value.trim(),
+        prompt: document.getElementById("e-prompt").value.trim(),
+        model: document.getElementById("e-model").value || undefined,
+        tags,
+        timeoutMs: parseInt(document.getElementById("e-timeout").value),
+        maxRetries: parseInt(document.getElementById("e-retries").value),
+      });
+      showToast("Saved", "success");
+      await loadJobs();
+      updateView();
+    } catch (err) { showToast(err.message, "error"); }
+  });
+  document.getElementById("btn-cancel-edit")?.addEventListener("click", () => updateView());
+}
+
 document.getElementById("log-close")?.addEventListener("click", () => {
   document.getElementById("log-modal")?.classList.add("hidden");
 });
@@ -730,6 +856,7 @@ function h(s) {
 function fmtTime(iso) {
   if (!iso) return "—";
   const d = new Date(iso);
+  if (isNaN(d.getTime())) return "—";
   const pad = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
@@ -747,10 +874,12 @@ async function renderSettings() {
   const providerCards = s.providers.map((p) => `
     <div class="project-card">
       <div class="project-card-header">
-        <h3>${h(p.name)} ${p.isDefault ? '<span class="badge">Default</span>' : ""}</h3>
-        <span class="project-card-path">${h(p.type)} &middot; ${h(p.defaultModel)}</span>
+        <h3>${h(p.name)} ${p.isDefault ? '<span class="badge">Default</span>' : ""} ${!p.enabled ? '<span class="badge" style="background:var(--red)">Disabled</span>' : ""}</h3>
+        <span class="project-card-path">${h(p.type)} &middot; ${h(p.defaultModel)} &middot; ${h(p.apiKeyEnvVar)}</span>
       </div>
       <div class="project-card-actions">
+        <button class="btn btn-sm" data-action="edit-provider" data-id="${p.id}">Edit</button>
+        <button class="btn btn-sm" data-action="toggle-provider" data-id="${p.id}">${p.enabled !== false ? "Disable" : "Enable"}</button>
         ${!p.isDefault ? `<button class="btn btn-sm" data-action="set-default-provider" data-id="${p.id}">Set Default</button>` : ""}
         ${!p.isDefault ? `<button class="btn btn-danger btn-sm" data-action="delete-provider" data-id="${p.id}">Delete</button>` : ""}
       </div>
@@ -783,6 +912,19 @@ async function renderSettings() {
         </div>
         <button class="btn btn-primary btn-sm" id="btn-save-defaults">Save Defaults</button>
       </div>
+
+      <h3 style="margin:24px 0 8px">Prompt Improvement</h3>
+      <div class="form-container" style="max-width:400px">
+        <div class="form-group">
+          <label>Provider</label>
+          <select id="s-pi-provider">${s.providers.map((p) => `<option value="${p.id}" ${s.promptImprovement?.providerId === p.id ? "selected" : ""}>${h(p.name)}</option>`).join("")}</select>
+        </div>
+        <div class="form-group">
+          <label>Model</label>
+          <input id="s-pi-model" type="text" value="${h(s.promptImprovement?.model || "")}" placeholder="e.g. deepseek-chat">
+        </div>
+        <button class="btn btn-primary btn-sm" id="btn-save-prompt-improvement">Save</button>
+      </div>
     </div>`;
 
   document.getElementById("btn-refresh-settings")?.addEventListener("click", () => renderSettings());
@@ -793,10 +935,31 @@ async function renderSettings() {
     try { await api("PUT", "/api/settings", s); showToast("Saved", "success"); }
     catch (err) { showToast(err.message, "error"); }
   });
+  document.getElementById("btn-save-prompt-improvement")?.addEventListener("click", async () => {
+    s.promptImprovement = {
+      providerId: document.getElementById("s-pi-provider").value,
+      model: document.getElementById("s-pi-model").value.trim(),
+    };
+    try { await api("PUT", "/api/settings", s); showToast("Saved", "success"); }
+    catch (err) { showToast(err.message, "error"); }
+  });
   document.querySelectorAll("[data-action=set-default-provider]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       try { await api("POST", `/api/settings/providers/${btn.dataset.id}/default`); renderSettings(); }
       catch (err) { showToast(err.message, "error"); }
+    });
+  });
+  document.querySelectorAll("[data-action=edit-provider]").forEach((btn) => {
+    btn.addEventListener("click", () => showEditProviderForm(btn.dataset.id, s));
+  });
+  document.querySelectorAll("[data-action=toggle-provider]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const prov = s.providers.find((x) => x.id === btn.dataset.id);
+      if (!prov) return;
+      try {
+        await api("PUT", `/api/settings/providers/${btn.dataset.id}`, { enabled: prov.enabled === false ? true : false });
+        renderSettings();
+      } catch (err) { showToast(err.message, "error"); }
     });
   });
   document.querySelectorAll("[data-action=delete-provider]").forEach((btn) => {
@@ -884,10 +1047,74 @@ function showAddProviderForm() {
   });
 }
 
+function showEditProviderForm(id, s) {
+  const p = s.providers.find((x) => x.id === id);
+  if (!p) { showToast("Provider not found", "error"); return; }
+  const form = document.getElementById("provider-form");
+  form.classList.remove("hidden");
+  form.innerHTML = `
+    <div class="form-container">
+      <h3>Edit Provider</h3>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Name</label>
+          <input id="pe-name" type="text" value="${h(p.name)}" required>
+        </div>
+        <div class="form-group">
+          <label>API Key Env Var</label>
+          <input id="pe-key" type="text" value="${h(p.apiKeyEnvVar)}" required>
+        </div>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Default Model</label>
+          <input id="pe-model" type="text" value="${h(p.defaultModel)}" required>
+        </div>
+        <div class="form-group">
+          <label>Base URL</label>
+          <input id="pe-base-url" type="text" value="${h(p.baseUrl || '')}" placeholder="For OpenAI-compatible providers">
+        </div>
+      </div>
+      ${p.type === "claude-cli" ? `
+      <div class="form-row">
+        <div class="form-group">
+          <label>Claude Command</label>
+          <input id="pe-claude-cmd" type="text" value="${h(p.claudeCmd || 'claude')}">
+        </div>
+        <div class="form-group">
+          <label>Claude Flags</label>
+          <input id="pe-claude-flags" type="text" value="${h(p.claudeFlags || '--dangerously-skip-permissions')}">
+        </div>
+      </div>` : ""}
+      <div class="form-actions">
+        <button class="btn btn-primary btn-sm" id="btn-save-edit-provider">Save</button>
+        <button class="btn btn-sm" id="btn-cancel-edit-provider">Cancel</button>
+      </div>
+    </div>`;
+
+  document.getElementById("btn-save-edit-provider")?.addEventListener("click", async () => {
+    const patch = {
+      name: document.getElementById("pe-name").value.trim(),
+      apiKeyEnvVar: document.getElementById("pe-key").value.trim(),
+      defaultModel: document.getElementById("pe-model").value.trim(),
+      baseUrl: document.getElementById("pe-base-url").value.trim() || undefined,
+    };
+    if (p.type === "claude-cli") {
+      patch.claudeCmd = document.getElementById("pe-claude-cmd").value.trim();
+      patch.claudeFlags = document.getElementById("pe-claude-flags").value.trim();
+    }
+    try { await api("PUT", `/api/settings/providers/${id}`, patch); renderSettings(); showToast("Provider updated", "success"); }
+    catch (err) { showToast(err.message, "error"); }
+  });
+  document.getElementById("btn-cancel-edit-provider")?.addEventListener("click", () => {
+    form.classList.add("hidden");
+  });
+}
+
 // ── Init ────────────────────────────────────────────────────────────
 async function init() {
   initSSE();
-  await loadJobs();
+  await Promise.all([loadJobs(), loadProjects()]);
   renderView();
 }
 
