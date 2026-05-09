@@ -1,0 +1,21 @@
+export interface AppConfig {
+  port: number;
+  dataDir: string;
+  claudeCmd: string;
+  claudeFlags: string;
+  defaultTimeoutMs: number;
+  defaultMaxRetries: number;
+  pollIntervalMs: number;
+}
+
+export function loadConfig(): AppConfig {
+  return {
+    port: parseInt(process.env.PORT || "3457", 10),
+    dataDir: process.env.SARAB_DATA_DIR || "./data",
+    claudeCmd: process.env.CLAUDE_CMD || "claude",
+    claudeFlags: process.env.CLAUDE_FLAGS || "--dangerously-skip-permissions",
+    defaultTimeoutMs: parseInt(process.env.SARAB_TIMEOUT || "600000", 10),
+    defaultMaxRetries: parseInt(process.env.SARAB_MAX_RETRIES || "2", 10),
+    pollIntervalMs: parseInt(process.env.SARAB_POLL_INTERVAL || "5000", 10),
+  };
+}

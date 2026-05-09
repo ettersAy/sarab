@@ -1,0 +1,295 @@
+# SARAB Mission Log
+Started: 2026-05-08
+
+## Initial Audit (2026-05-08)
+
+### What was found
+- **Backend ~90% complete**: Express server, JSONL job storage, Claude executor (spawn-based), poll-driven queue manager, SSE broadcasting, REST API (jobs CRUD, queue pause/resume), HTML/CSS shell
+- **Frontend MISSING**: `src/web/app.js` is referenced in index.html line 42 but does not exist — the web UI is non-functional
+- **Dependencies not installed**: `node_modules/` absent
+- **Dead code**: `src/constants.ts` duplicates `src/config.ts` and is imported nowhere
+- **Missing script**: `scripts/smoke-test.sh` referenced in package.json doesn't exist
+- **Zero tests**: No Playwright or unit tests
+- **git-start.sh**: Unrelated utility, not part of SARAB app
+- **old_scripts/**: Original claude-worker.sh and claude-batch.sh preserved for reference
+
+### Backend architecture summary
+- `src/config.ts` — env-based configuration
+- `src/errors.ts` — AppError hierarchy (NotFound, Validation, Conflict)
+- `src/logger.ts` — colored console logger
+- `src/server.ts` — Express app, wires everything, serves static + API + SSE
+- `src/executor/claude.ts` — spawns `claude -p "prompt"` with timeout support
+- `src/executor/types.ts` — ExecutorInput/Output interfaces
+- `src/queue/manager.ts` — EventEmitter-based poll loop, processes jobs one at a time with retry/backoff
+- `src/queue/sse.ts` — SSE client registry, broadcasts job events and stats
+- `src/queue/types.ts` — Job, QueueStats, JobCreateInput, JobLog interfaces
+- `src/storage/jobs.ts` — JSONL file store (append + atomic rewrite for updates)
+- `src/storage/logs.ts` — per-job .log files
+- `src/api/router.ts` — mounts /api/jobs and /api/queue sub-routers
+- `src/api/jobs.ts` — GET/POST/DELETE jobs, cancel, retry, log
+- `src/api/queue.ts` — GET status, POST pause/resume
+- `src/web/index.html` — SPA shell with topbar nav, modal placeholder, toast
+- `src/web/styles.css` — dark theme CSS (GitHub-inspired)
+
+## Phase 1 — MVP Complete (2026-05-08)
+
+### Completed
+- Created `src/web/app.js` — full vanilla JS SPA frontend:
+  - SSE real-time event handling
+  - Dashboard with stats cards + recent jobs table
+  - Queue view with status filters and job actions
+  - Job submission form with validation
+  - Log viewer modal
+  - Toast notifications
+  - Pause/resume queue controls
+- `npm install` — 93 packages, 0 vulnerabilities
+- TypeScript compilation clean (`tsc --noEmit` passes)
+- Created `scripts/smoke-test.sh` — 16 smoke tests:
+  - Health endpoint, static file serving (HTML, CSS, JS)
+  - Jobs CRUD (list, create, get, delete, 404 for missing)
+  - Job stats, cancel, queue pause/resume
+  - SSE endpoint streaming
+- All 16 smoke tests passing
+
+### Key design decisions
+- Frontend is vanilla JS (no framework) — avoids build tooling complexity
+- SSE for real-time updates instead of polling
+- JSONL-based storage for simplicity (append-only, atomic rewrites)
+- Queue manager uses EventEmitter pattern for loose coupling with SSE
+
+## Phase 2 — Audit Complete (2026-05-08)
+
+### Generated
+- `missions/01-in-progress/audit-report.md` — full audit of architecture, code quality, UX, security, testing
+- `missions/01-in-progress/improvement-tasks.md` — prioritized task list (5 HIGH, 7 MEDIUM, 6 LOW)
+
+### Key findings
+- **HIGH**: Dead code (constants.ts), no startup recovery for running jobs, no body size limit, duplicate defaults, mixed error types
+- **MEDIUM**: JSONL reads entire file per operation, no pagination, no loading states, tags not displayed, no model validation, no log file, no SSE disconnect indicator
+- **LOW**: No responsive design, no text search, no concurrency config, no linting, no Docker
+
+## Phase 3 — Refactor/Fix Complete (2026-05-08)
+
+### HIGH priority fixes (all done)
+- H1: Deleted `src/constants.ts` (dead code)
+- H2: Startup recovery — stale "running"/"retrying" jobs marked as "failed" on boot
+- H3: Request body size limited to 1MB (`express.json({ limit: "1mb" })`)
+- H4: Config defaults passed to JobStore — single source of truth for timeout/retries
+- H5: Replaced raw `new Error(...)` with `NotFoundError`/`ValidationError` in manager and store
+
+### MEDIUM priority fixes (done)
+- M2: Loading states for all action buttons (cancel, retry, delete, pause/resume)
+- M3: Tags displayed as chips in job table rows
+- M4: Model names validated against allowed list on job creation
+- M5: Persistent server log file (`data/server.log`) via `setLogFile()`
+- M7: SSE disconnect indicator in topbar status
+
+### Skipped (low impact for MVP)
+- M1: In-memory job index (JSONL is fine for <1000 jobs)
+- M6: Pagination (can be added when needed)
+
+## Phase 4 — Playwright Tests Complete (2026-05-08)
+
+### Created
+- `playwright.config.ts` — config with auto-started dev server on port 3469
+- `tests/api.spec.ts` — 24 API tests covering health, static files, jobs CRUD, queue management
+- `tests/ui.spec.ts` — 11 UI tests covering navigation, dashboard, submit form, queue, SSE indicator
+
+### Test structure
+- API tests use `test.describe` blocks: Health, Job CRUD (with beforeEach/afterEach), Job listing & stats, Queue management
+- UI tests are self-contained, using Playwright's `page` fixture
+
+## Phase 5 — Audit Playwright Complete (2026-05-08)
+
+### Fixed
+- Eliminated test ordering dependency — each `describe` block manages its own state with `beforeEach`/`afterEach`
+- Fixed UI tests that assumed empty queue (can now handle either table or empty state)
+- Grouped related tests into `describe` blocks for better organization
+
+### Assessment
+- No flaky tests detected — all 35 pass consistently (within 5s)
+- File split is appropriate (API vs UI), no files need splitting
+- Page objects not needed for MVP with 3 views — locators used directly
+- Reusable helpers not extracted — tests are clear without them
+
+## Phase 6 — Continuous Fix/Test Cycle Complete (2026-05-08)
+- All 35 tests pass with zero failures
+- No further fixes needed
+
+## Phase 7 — Upgrade Features Complete (2026-05-08)
+
+### Added
+- Text search in queue view — filter jobs by title or ID (client-side, instant)
+- Claude CLI health check — `/health` now reports `claude: "available"|"unavailable"`
+- Job count shown in queue header
+- Removed dead types `JobUpdateInput` and `JobLog` from `queue/types.ts`
+
+## Phase 8 — Re-Audit Complete (2026-05-08)
+
+### Verified
+- All dead code removed (constants.ts, JobUpdateInput, JobLog)
+- All Error throws use AppError hierarchy — no raw `new Error()`
+- Default values single-sourced via JobStore constructor params
+- Body size limited to 1MB
+- Startup recovery handles stale jobs
+- File sizes all reasonable (largest: manager.ts at 214 lines)
+- No files need splitting
+
+### Phase 9 — Improve Again Complete (2026-05-08)
+
+### Fixed
+- Race condition in `writeAll()` — temp file now uses unique UUID suffix to prevent cross-worker conflicts during Playwright parallel tests
+
+## Mission Summary
+
+### Final test results
+- **16 smoke tests**: all passing
+- **35 Playwright tests**: all passing (24 API + 11 UI)
+- **TypeScript**: compiles cleanly with strict mode
+- **Total**: 51 tests, 0 failures
+
+### Project structure
+```
+src/
+├── config.ts           — env-based configuration
+├── errors.ts           — AppError hierarchy
+├── logger.ts           — console + file logger
+├── server.ts           — Express app entry point
+├── executor/
+│   ├── types.ts        — Executor interface
+│   └── claude.ts       — Claude CLI spawn executor
+├── storage/
+│   ├── jobs.ts         — JSONL job store
+│   └── logs.ts         — per-job log files
+├── queue/
+│   ├── types.ts        — Job, QueueStats, JobCreateInput
+│   ├── manager.ts      — Poll-driven queue with retry/backoff
+│   └── sse.ts          — SSE client manager
+├── api/
+│   ├── router.ts       — API router mounting
+│   ├── jobs.ts         — /api/jobs endpoints
+│   └── queue.ts        — /api/queue endpoints
+├── web/
+│   ├── index.html      — SPA shell
+│   ├── styles.css      — Dark theme
+│   └── app.js          — Vanilla JS frontend
+tests/
+├── api.spec.ts         — 24 API tests
+└── ui.spec.ts          — 11 UI tests
+scripts/
+└── smoke-test.sh       — 16 smoke tests
+```
+
+### What the app does
+- Web UI for submitting Claude CLI prompts as queued jobs
+- Real-time SSE updates (no page refresh needed)
+- Job lifecycle: pending → running → completed/failed/cancelled
+- Retry with exponential backoff
+- Cancel and delete jobs
+- Queue pause/resume
+- Execution logs per job
+- Tagging and text search
+- Persistent storage (JSONL + log files)
+- Claude CLI health monitoring
+
+---
+
+## Reflection & Improvement Session (2026-05-08)
+
+### Phase 1 — Reconstruction
+
+**What was completed:**
+- Full MVP backend + frontend (Express, vanilla JS SPA, SSE)
+- 51 tests (16 smoke + 35 Playwright) — all passing
+- 5 HIGH + 5 MEDIUM audit fixes applied
+- Dead code removed, error handling unified, race condition fixed
+
+**What failed/required rework:**
+- Smoke test: 3 iterations to get working (port env var, SSE timeout, cancel timing)
+- Playwright tests: 2 iterations (ordering dependency, empty-state assumption)
+- JSONL writeAll race condition found and fixed (shared .tmp → uuid-based)
+
+**Time wasted on:**
+- Port issues in smoke test (server ignored CLI port, needed env var)
+- SSE curl hanging (needed --max-time)
+- Test ordering debugging (shared jobId variable)
+
+### Phase 2 — Error Reflection
+
+| # | Mistake | Avoidance |
+|---|---------|-----------|
+| 1 | Smoke test didn't pass PORT via env | Always check how config is loaded before writing scripts |
+| 2 | SSE curl had no timeout | Add `--max-time` to any SSE/long-poll curl |
+| 3 | Smoke test cancel raced with queue poll | Pause queue before testing cancel in scripts |
+| 4 | API tests shared mutable variable | Use `describe` + `beforeEach` for isolated state |
+| 5 | UI tests assumed empty queue | Use `.or()` matcher or don't assume empty state |
+| 6 | `writeAll` used shared `.tmp` file | Use unique temp filenames (uuid) for atomic writes |
+| 7 | No CLAUDE.md existed | Always create project instruction file for agent context |
+| 8 | New `prompt.ts` threw raw Error | Enforce AppError convention project-wide |
+| 9 | No tests for new `prompt.ts` endpoint | Add tests with every new endpoint |
+| 10 | Prompt improvement tests call real Claude (slow) | Consider executor mocking for faster test runs |
+
+### Phase 3 — Instruction Updates
+
+Created `CLAUDE.md` with:
+- Project description and common commands
+- Architecture overview (data flow, layers)
+- "Where to change code" table (feature → file mapping)
+- Known pitfalls (7 documented)
+- Testing workflow (smoke → Playwright → combined)
+- Project conventions (AppError, config flow, SSE events)
+
+### Phase 4 — Automation
+
+Created `scripts/run-all-tests.sh`:
+- Runs `tsc --noEmit` → smoke tests → Playwright tests
+- Fails fast on first error
+- Cleans data dir between runs
+
+### Phase 5 — Documentation
+
+`CLAUDE.md` serves as the single source of project knowledge. No bloated docs. All sections are actionable and searchable.
+
+### Phase 6 — Implemented Improvements
+
+- **CLAUDE.md**: Project instruction file for future agents
+- **`scripts/run-all-tests.sh`**: Combined test runner
+- **`src/api/prompt.ts`**: Fixed raw `new Error` → `AppError` (matches project convention)
+- **`tests/api.spec.ts`**: Added 8 prompt improvement tests (validation + all 5 actions)
+- **Test count**: 35 → 43
+
+### Phase 7 — Validation
+
+```
+TypeScript: clean (strict mode)
+Smoke tests: 16 passed
+Playwright: 43 passed (24 API + 11 UI + 8 prompt)
+Total: 59 tests, 0 failures
+```
+
+### Phase 8 — Final Report
+
+**Mistakes found**: 10 (documented above with avoidance strategies)
+
+**Instructions updated**:
+- `CLAUDE.md` — new, comprehensive project guidance
+
+**Scripts created**:
+- `scripts/run-all-tests.sh` — combined test runner
+
+**Tests added**:
+- 8 prompt improvement endpoint tests
+
+**Remaining risks**:
+- Prompt improvement tests call real Claude CLI (slow, 6-23s each, uses API credits)
+- No executor mock/fake for faster testing
+- JSONL storage won't scale past ~1000 jobs
+- No authentication on API endpoints
+- Smoke test script port may conflict if not configured
+
+**Recommendations for next mission**:
+1. Add a fake/mock executor for test speed (prompt tests add ~60s to suite)
+2. Implement projects feature as designed in `missions/00-backlogs/002_*.md`
+3. Add authentication if deploying beyond localhost
+4. Consider SQLite migration when job count exceeds 500
+5. Add CI/CD pipeline (GitHub Actions)

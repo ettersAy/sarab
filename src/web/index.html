@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SARAB — Smart AI Request Automation Bot</title>
+  <link rel="stylesheet" href="/styles.css">
+</head>
+<body>
+  <header class="topbar">
+    <div class="topbar-brand">
+      <span class="logo">&#9654;</span>
+      <h1>SARAB</h1>
+      <span class="badge">MVP</span>
+    </div>
+    <nav class="topbar-nav" id="nav">
+      <button data-view="dashboard" class="nav-btn active">Dashboard</button>
+      <button data-view="queue" class="nav-btn">Queue</button>
+      <button data-view="submit" class="nav-btn">New Prompt</button>
+    </nav>
+    <div class="topbar-status">
+      <span id="queue-indicator" class="indicator running">&#9679;</span>
+      <span id="queue-label">Worker</span>
+    </div>
+  </header>
+
+  <main id="main"></main>
+
+  <div id="log-modal" class="modal hidden">
+    <div class="modal-overlay"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h3 id="log-title">Execution Log</h3>
+        <button class="modal-close" id="log-close">&times;</button>
+      </div>
+      <pre id="log-body" class="log-body"></pre>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="/app.js"></script>
+</body>
+</html>

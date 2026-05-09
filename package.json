@@ -1,0 +1,26 @@
+{
+  "name": "sarab",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "SARAB — Smart AI Request Automation Bot. Web UI for queuing and executing Claude prompts with real-time monitoring.",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "check": "tsc --noEmit",
+    "test": "npx playwright test",
+    "smoke": "./scripts/smoke-test.sh"
+  },
+  "dependencies": {
+    "express": "^4.21.0",
+    "uuid": "^10.0.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.46.0",
+    "@types/express": "^4.17.21",
+    "@types/uuid": "^10.0.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.6.0"
+  }
+}
