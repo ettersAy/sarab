@@ -80,7 +80,7 @@ echo ""
 check "Health endpoint"            "GET"  "/health"           200
 check "Web UI loads"               "GET"  "/"                 200
 check "CSS loads"                  "GET"  "/styles.css"       200
-check "JS loads"                   "GET"  "/app.js"           200
+check "JS loads"                   "GET"  "/js/core.js"      200
 
 # ── Jobs API ─────────────────────────────────────────────────
 check "List jobs (empty)"          "GET"  "/api/jobs"         200
