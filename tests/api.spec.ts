@@ -531,6 +531,47 @@ test.describe("Execution modes", () => {
   });
 });
 
+// ── Heartbeat / timeout model ────────────────────────────────────
+test.describe("Heartbeat timeout model", () => {
+  test("job accepts timeoutMs=0 and idleTimeoutMs", async ({ request }) => {
+    const res = await request.post("/api/jobs", {
+      data: {
+        title: "Idle timeout check",
+        prompt: "test",
+        timeoutMs: 0,
+        idleTimeoutMs: 300000,
+        maxRetries: 0,
+      },
+    });
+    expect(res.status()).toBe(201);
+    const job = await res.json();
+    expect(job.idleTimeoutMs).toBe(300000);
+    expect(job.timeoutMs).toBe(0);
+
+    await request.post(`/api/jobs/${job.id}/cancel`);
+    await request.delete(`/api/jobs/${job.id}`);
+  });
+
+  test("settings executionDefaults includes idleTimeoutMs", async ({ request }) => {
+    const res = await request.get("/api/settings");
+    expect(res.status()).toBe(200);
+    const s = await res.json();
+    expect(typeof s.executionDefaults.idleTimeoutMs).toBe("number");
+    expect(s.executionDefaults.idleTimeoutMs).toBeGreaterThan(0);
+  });
+
+  test("queue pause/resume preserves heartbeat-ready state", async ({ request }) => {
+    // Verify queue can pause and resume correctly with heartbeat model
+    await request.post("/api/queue/pause");
+    const paused = await request.get("/api/queue/status");
+    expect((await paused.json()).running).toBe(false);
+
+    await request.post("/api/queue/resume");
+    const resumed = await request.get("/api/queue/status");
+    expect((await resumed.json()).running).toBe(true);
+  });
+});
+
 // ── Tickets (Kanban) ─────────────────────────────────────────
 test.describe("Tickets", () => {
   let ticketId: string;

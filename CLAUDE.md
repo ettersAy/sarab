@@ -233,6 +233,6 @@ Smoke tests start their own server on a specified port.
 - Config defaults flow from `config.ts` → constructors (not hardcoded twice)
 - Storage: JSONL per entity (jobs, projects, sessions), JSON for settings
 - Frontend state: `currentView`, `jobs[]`, `projects[]`, `currentProjectId`, `stats{}`, `queueFilter`, `queueSearch`, `sessions[]`, `sessionMode`
-- SSE events: `job-started`, `job-completed`, `job-failed`, `job-cancelled`, `job-retrying`, `stats`
+- SSE events: `job-started`, `job-completed`, `job-failed`, `job-cancelled`, `job-retrying`, `job-heartbeat`, `stats`
 - API convention: factory functions `createXxxRouter(dep1, dep2)` returning Express Router
 - DI: manual linear wiring in `server.ts`, no container needed

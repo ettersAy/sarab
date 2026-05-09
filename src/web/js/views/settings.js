@@ -40,9 +40,16 @@ async function renderSettings() {
       <div class="form-container" style="max-width:400px">
         <div class="form-row">
           <div class="form-group">
-            <label>Timeout (ms)</label>
-            <input id="s-timeout" type="number" value="${s.executionDefaults.timeoutMs}" min="10000" step="10000">
+            <label>Hard Timeout (ms, 0 = none)</label>
+            <input id="s-timeout" type="number" value="${s.executionDefaults.timeoutMs || 0}" min="0" step="60000">
           </div>
+          <div class="form-group">
+            <label>Idle Timeout (ms, 0 = none)</label>
+            <input id="s-idle-timeout" type="number" value="${s.executionDefaults.idleTimeoutMs || 1800000}" min="0" step="60000">
+            <div class="hint">Kill if no output for this long. Default 30 min.</div>
+          </div>
+        </div>
+        <div class="form-row">
           <div class="form-group">
             <label>Max Retries</label>
             <input id="s-retries" type="number" value="${s.executionDefaults.maxRetries}" min="0" max="10">
@@ -68,7 +75,8 @@ async function renderSettings() {
   document.getElementById("btn-refresh-settings")?.addEventListener("click", () => renderSettings());
   document.getElementById("btn-add-provider")?.addEventListener("click", showAddProviderForm);
   document.getElementById("btn-save-defaults")?.addEventListener("click", async () => {
-    s.executionDefaults.timeoutMs = parseInt(document.getElementById("s-timeout").value);
+    s.executionDefaults.timeoutMs = parseInt(document.getElementById("s-timeout").value) || 0;
+    s.executionDefaults.idleTimeoutMs = parseInt(document.getElementById("s-idle-timeout").value) || 0;
     s.executionDefaults.maxRetries = parseInt(document.getElementById("s-retries").value);
     try { await api("PUT", "/api/settings", s); showToast("Saved", "success"); }
     catch (err) { showToast(err.message, "error"); }

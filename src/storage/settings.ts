@@ -40,7 +40,20 @@ export class SettingsStore {
     if (!existsSync(this.filePath)) return { ...DEFAULT_SETTINGS };
     try {
       const raw = readFileSync(this.filePath, "utf-8");
-      return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+      const saved = JSON.parse(raw);
+      // Deep-merge executionDefaults so new defaults fill missing keys
+      return {
+        ...DEFAULT_SETTINGS,
+        ...saved,
+        executionDefaults: {
+          ...DEFAULT_SETTINGS.executionDefaults,
+          ...(saved.executionDefaults || {}),
+        },
+        promptImprovement: {
+          ...DEFAULT_SETTINGS.promptImprovement,
+          ...(saved.promptImprovement || {}),
+        },
+      };
     } catch {
       return { ...DEFAULT_SETTINGS };
     }

@@ -49,6 +49,8 @@ function initSSE() {
   };
 }
 
+let heartbeats = {};
+
 function handleSSE(msg) {
   switch (msg.type) {
     case "stats":
@@ -56,16 +58,43 @@ function handleSSE(msg) {
       updateIndicator();
       if (currentView === "dashboard") renderDashboard();
       break;
+    case "job-heartbeat":
+      heartbeats[msg.payload.jobId] = msg.payload.at;
+      if (currentView === "queue") updateHeartbeatDisplay();
+      break;
     case "job-started":
+      heartbeats[msg.payload.id] = new Date().toISOString();
+      replaceJob(msg.payload);
+      updateView();
+      break;
     case "job-completed":
     case "job-failed":
     case "job-cancelled":
+      delete heartbeats[msg.payload.id];
+      replaceJob(msg.payload);
+      updateView();
+      break;
     case "job-retrying":
       replaceJob(msg.payload);
       updateView();
       break;
   }
 }
+
+function updateHeartbeatDisplay() {
+  document.querySelectorAll(".job-last-activity").forEach((el) => {
+    const jobId = el.dataset.jobId;
+    const at = heartbeats[jobId];
+    if (at) {
+      const secs = Math.round((Date.now() - new Date(at).getTime()) / 1000);
+      el.textContent = secs < 60 ? `active ${secs}s ago` : `active ${Math.floor(secs/60)}m ago`;
+      el.style.color = secs < 120 ? "var(--green)" : "var(--yellow)";
+    }
+  });
+}
+
+// Update heartbeat display every 10 seconds
+setInterval(updateHeartbeatDisplay, 10000);
 
 function replaceJob(job) {
   const idx = jobs.findIndex((j) => j.id === job.id);

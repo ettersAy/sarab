@@ -21,6 +21,7 @@ export class SSEManager {
     queueManager.on("job-failed", (e) => this.broadcast("job-failed", e.job));
     queueManager.on("job-cancelled", (e) => this.broadcast("job-cancelled", e.job));
     queueManager.on("job-retrying", (e) => this.broadcast("job-retrying", e.job));
+    queueManager.on("job-heartbeat", (e) => this.broadcast("job-heartbeat", e));
     queueManager.on("queue-tick", () => this.broadcast("stats", this.jobStore.stats()));
   }
 

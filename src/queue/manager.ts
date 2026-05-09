@@ -14,6 +14,7 @@ export type QueueEvent =
   | { type: "job-failed"; job: Job }
   | { type: "job-cancelled"; job: Job }
   | { type: "job-retrying"; job: Job }
+  | { type: "job-heartbeat"; jobId: string; at: string }
   | { type: "queue-tick" };
 
 export class QueueManager extends EventEmitter {
@@ -211,7 +212,7 @@ export class QueueManager extends EventEmitter {
           this.logStore.write(job.id, chunk);
         },
         onHeartbeat: () => {
-          // SSE heartbeat keeps the UI aware the job is alive
+          this.emit("job-heartbeat", { type: "job-heartbeat", jobId: job.id, at: new Date().toISOString() });
         },
       };
 

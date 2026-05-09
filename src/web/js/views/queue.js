@@ -96,7 +96,10 @@ function renderJobRow(j) {
         ${h(j.title)}
         ${tagsHtml ? `<div style="margin-top:2px">${tagsHtml}</div>` : ""}
       </td>
-      <td><span class="status-badge ${h(j.status)}">${h(j.status)}</span></td>
+      <td>
+        <span class="status-badge ${h(j.status)}">${h(j.status)}</span>
+        ${j.status === "running" || j.status === "retrying" ? `<div class="job-last-activity" data-job-id="${j.id}" style="font-size:10px;margin-top:2px"></div>` : ""}
+      </td>
       <td>${(j.attempt ?? 0) + 1}</td>
       <td class="job-time">${time}</td>
       <td>
