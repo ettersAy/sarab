@@ -70,6 +70,20 @@ async function renderSettings() {
         </div>
         <button class="btn btn-primary btn-sm" id="btn-save-prompt-improvement">Save</button>
       </div>
+
+      <h3 style="margin:24px 0 8px">Chat Defaults</h3>
+      <div class="form-container" style="max-width:400px">
+        <p style="font-size:11px;color:var(--text-dim);margin-bottom:12px">Provider and model used by the chat widget for fast responses.</p>
+        <div class="form-group">
+          <label>Provider</label>
+          <select id="s-chat-provider">${s.providers.map((p) => `<option value="${p.id}" ${s.chatDefaults?.providerId === p.id ? "selected" : ""}>${h(p.name)}</option>`).join("")}</select>
+        </div>
+        <div class="form-group">
+          <label>Model</label>
+          <input id="s-chat-model" type="text" value="${h(s.chatDefaults?.model || "")}" placeholder="e.g. deepseek-chat">
+        </div>
+        <button class="btn btn-primary btn-sm" id="btn-save-chat-defaults">Save</button>
+      </div>
     </div>`;
 
   document.getElementById("btn-refresh-settings")?.addEventListener("click", () => renderSettings());
@@ -87,6 +101,14 @@ async function renderSettings() {
       model: document.getElementById("s-pi-model").value.trim(),
     };
     try { await api("PUT", "/api/settings", s); showToast("Saved", "success"); }
+    catch (err) { showToast(err.message, "error"); }
+  });
+  document.getElementById("btn-save-chat-defaults")?.addEventListener("click", async () => {
+    s.chatDefaults = {
+      providerId: document.getElementById("s-chat-provider").value,
+      model: document.getElementById("s-chat-model").value.trim(),
+    };
+    try { await api("PUT", "/api/settings", s); showToast("Saved — restart required for provider change", "success"); }
     catch (err) { showToast(err.message, "error"); }
   });
   document.querySelectorAll("[data-action=set-default-provider]").forEach((btn) => {

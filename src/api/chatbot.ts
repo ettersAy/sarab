@@ -50,10 +50,14 @@ export function createChatbotRouter(
       const project = projectStore.get(projectId);
       if (!project) throw new NotFoundError("Project", projectId);
 
-      // Determine model
+      // Determine model — prefer request, then project, then chat defaults, then provider default
       const settings = settingsStore.load();
       const defaultProvider = settings.providers.find((p) => p.isDefault) ?? settings.providers[0];
-      const model = requestedModel || project.settings?.defaultModel || defaultProvider?.defaultModel || "claude-sonnet-4-6";
+      const model = requestedModel
+        || project.settings?.defaultModel
+        || settings.chatDefaults?.model
+        || defaultProvider?.defaultModel
+        || "claude-sonnet-4-6";
 
       // Load context files from project settings
       const contextFiles = project.settings?.contextFiles || [];

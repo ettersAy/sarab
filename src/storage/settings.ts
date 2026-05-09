@@ -27,6 +27,10 @@ const DEFAULT_SETTINGS: AppSettings = {
     providerId: "claude-cli-default",
     model: "claude-sonnet-4-6",
   },
+  chatDefaults: {
+    providerId: "claude-cli-default",
+    model: "claude-sonnet-4-6",
+  },
 };
 
 export class SettingsStore {
@@ -53,6 +57,10 @@ export class SettingsStore {
         promptImprovement: {
           ...DEFAULT_SETTINGS.promptImprovement,
           ...(saved.promptImprovement || {}),
+        },
+        chatDefaults: {
+          ...DEFAULT_SETTINGS.chatDefaults,
+          ...(saved.chatDefaults || {}),
         },
       };
       // Fallback: if defaultProviderId is stale, reset to first enabled provider

@@ -77,6 +77,35 @@
 
   <div id="toast" class="toast hidden"></div>
 
+  <!-- Floating Chat Widget -->
+  <button id="chat-fab" class="chat-fab" title="Open chat">
+    <span class="chat-fab-icon">&#128172;</span>
+  </button>
+  <div id="chat-widget" class="chat-widget hidden">
+    <div class="chat-widget-header">
+      <span class="chat-widget-title">Chat</span>
+      <div class="chat-widget-header-actions">
+        <button id="chat-widget-clear" class="chat-widget-btn" title="New chat">+</button>
+        <button id="chat-widget-close" class="chat-widget-btn" title="Close">&times;</button>
+      </div>
+    </div>
+    <div class="chat-widget-body">
+      <div class="chat-widget-controls">
+        <select id="cw-project" class="chat-widget-select">
+          <option value="">Select project...</option>
+        </select>
+        <select id="cw-model" class="chat-widget-select"></select>
+      </div>
+      <div class="chat-widget-messages" id="cw-messages">
+        <div class="chat-widget-empty">Ask a question about your project.</div>
+      </div>
+      <div class="chat-widget-input-area">
+        <input id="cw-input" type="text" placeholder="Ask something..." class="chat-widget-input" autocomplete="off">
+        <button id="cw-send" class="btn btn-primary btn-sm chat-widget-send">Send</button>
+      </div>
+    </div>
+  </div>
+
   <script src="/js/core.js"></script>
   <script src="/js/views/dashboard.js"></script>
   <script src="/js/views/queue.js"></script>
@@ -85,6 +114,7 @@
   <script src="/js/views/kanban.js"></script>
   <script src="/js/views/settings.js"></script>
   <script src="/js/views/chatbot.js"></script>
+  <script src="/js/chatwidget.js"></script>
   <script src="/js/actions.js"></script>
   <script src="/js/modals.js"></script>
 </body>

@@ -28,6 +28,7 @@ export function createApiRouter(
   ticketStore: TicketStore,
   chatStore: ChatStore,
   promptExecutor?: Executor,
+  chatExecutor?: Executor,
 ): Router {
   const router = Router();
 
@@ -38,7 +39,7 @@ export function createApiRouter(
   router.use("/projects", createProjectsRouter(projectStore, jobStore, sessionStore));
   router.use("/settings", createSettingsRouter(settingsStore));
   router.use("/tickets", createTicketsRouter(ticketStore));
-  router.use("/chatbot", createChatbotRouter(chatStore, projectStore, settingsStore, executor));
+  router.use("/chatbot", createChatbotRouter(chatStore, projectStore, settingsStore, chatExecutor ?? executor));
 
   return router;
 }

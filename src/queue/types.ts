@@ -121,6 +121,10 @@ export interface AppSettings {
     providerId: string;
     model: string;
   };
+  chatDefaults: {
+    providerId: string;
+    model: string;
+  };
 }
 
 // ── Kanban Tickets ────────────────────────────────────────────

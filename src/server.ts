@@ -49,6 +49,15 @@ const promptExecutor: Executor | undefined = piProvider
   ? createExecutor(piProvider)
   : executor;
 
+// Chat executor from settings (can be different from main executor for fast responses)
+const chatProviderId = settings.chatDefaults?.providerId;
+const chatProvider = chatProviderId
+  ? settings.providers.find((p) => p.id === chatProviderId)
+  : defaultProvider;
+const chatExecutor: Executor = chatProvider
+  ? createExecutor(chatProvider)
+  : executor;
+
 // Queue
 const queueManager = new QueueManager(jobStore, logStore, executor, config.pollIntervalMs, sessionStore, projectStore, config.concurrency);
 
@@ -64,7 +73,7 @@ const webDir = join(__dirname, "web");
 app.use(express.static(webDir));
 
 // API routes
-app.use("/api", createApiRouter(jobStore, logStore, queueManager, executor, projectStore, sessionStore, settingsStore, ticketStore, chatStore, promptExecutor));
+app.use("/api", createApiRouter(jobStore, logStore, queueManager, executor, projectStore, sessionStore, settingsStore, ticketStore, chatStore, promptExecutor, chatExecutor));
 
 // SSE endpoint
 app.get("/api/events", (req, res) => {
