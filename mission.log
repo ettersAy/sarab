@@ -377,8 +377,35 @@ Total: 59 tests, 0 failures
 
 **Tested**: 54 tests passing (38 non-slow Playwright + 16 smoke), TypeScript clean
 
-### Next phases
-- Phase 7: Execution architecture refactor (session modes fully tested)
-- Phase 8: UI/UX upgrade (prompt detail view, session selector, execution mode UI)
-- Phases 9-12: Audit, docs, tests, fix loop
-- Phases 13-20: Settings feature (multi-provider)
+### Phase 7 — Execution Architecture Polish (2026-05-08)
+- Added debug logging for session resolution and project root cwd
+- All 5 execution modes functional: new, resume specific, resume latest
+
+### Phase 8 — UI/UX Upgrade (2026-05-08)
+**Submit form enhanced**: project selector, session mode (New/Resume Latest/Resume Specific), session picker
+**Job rows**: View (detail), Dup (duplicate), Retry, Log, Cancel, Delete buttons
+**Prompt detail modal**: metadata, prompt text, session info
+**Frontend size**: app.js at 743 lines
+
+### Phase 9 — Audit Complete (2026-05-08)
+- File sizes all within bounds (largest TS: 253, largest JS: 743)
+- No dead code, AppError convention followed, uuid tmp files everywhere
+
+### Phase 10 — Documentation (2026-05-08)
+- CLAUDE.md already comprehensive; JSDoc added to session capture regex
+
+### Phase 11 — Playwright Tests (2026-05-08)
+**15 new tests added** (53 non-slow total, up from 38):
+- Projects: list, create, get, validate rootPath, duplicate names, update, delete, project-scoped jobs
+- Prompt mgmt: PATCH edit, POST duplicate, GET detail, create with projectId
+- Sessions: list empty, latest 404, get by id 404
+
+### Phase 12 — Test/Fix Loop Complete (2026-05-08)
+- 53 non-slow Playwright tests pass (5.8s)
+- 5 slow prompt improvement tests pass (18.8s with DeepSeek HTTP)
+- 16 smoke tests pass
+- **Total: 74 tests, 0 failures**
+
+### Remaining: Phases 13-20 — Settings multi-provider system
+Data model (`AIProvider`, `AppSettings`) and storage (`SettingsStore`) already done in Phase 2.
+Remaining: Settings UI, provider CRUD API, executor factory, provider-agnostic execution, tests.

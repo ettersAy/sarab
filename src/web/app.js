@@ -353,9 +353,11 @@ function renderJobRow(j) {
       <td class="job-time">${time}</td>
       <td>
         <div class="btn-group">
+          <button class="btn btn-sm" data-action="detail" data-id="${j.id}">View</button>
           ${j.status === "pending" ? `<button class="btn btn-danger btn-sm" data-action="cancel" data-id="${j.id}">Cancel</button>` : ""}
           ${j.status === "completed" || j.status === "failed" ? `<button class="btn btn-sm" data-action="retry" data-id="${j.id}">Retry</button>` : ""}
           ${j.status === "completed" || j.status === "failed" ? `<button class="btn btn-sm" data-action="log" data-id="${j.id}">Log</button>` : ""}
+          ${j.status !== "running" && j.status !== "retrying" ? `<button class="btn btn-sm" data-action="duplicate" data-id="${j.id}">Dup</button>` : ""}
           ${j.status !== "running" && j.status !== "retrying" ? `<button class="btn btn-danger btn-sm" data-action="delete" data-id="${j.id}">Del</button>` : ""}
         </div>
       </td>
@@ -369,6 +371,8 @@ function bindJobActions() {
       const id = btn.dataset.id;
       const action = btn.dataset.action;
       if (action === "log") { viewLog(id); return; }
+      if (action === "detail") { viewDetail(id); return; }
+      if (action === "duplicate") { duplicateJob(id); return; }
 
       const origText = btn.textContent;
       btn.disabled = true;
@@ -387,13 +391,22 @@ function bindJobActions() {
 }
 
 // ── Submit form ─────────────────────────────────────────────────────
+let sessions = [];
+let sessionMode = "";
+
 function renderSubmit() {
   const modelOpts = MODELS.map((m) => `<option value="${m}">${m}</option>`).join("");
+  const projectOpts = projects.map((p) =>
+    `<option value="${p.id}" ${currentProjectId === p.id ? "selected" : ""}>${h(p.name)}</option>`
+  ).join("");
+  const projectLabel = currentProjectId
+    ? (projects.find((p) => p.id === currentProjectId)?.name || "Project")
+    : "";
 
   $main.innerHTML = `
     <div class="view active" id="view-submit">
       <div class="form-container">
-        <h2 style="margin-bottom:20px">New Prompt</h2>
+        <h2 style="margin-bottom:20px">New Prompt ${projectLabel ? `— ${h(projectLabel)}` : ""}</h2>
         <form id="submit-form">
           <div class="form-group">
             <label for="f-title">Title</label>
@@ -428,6 +441,25 @@ function renderSubmit() {
           </div>
           <div class="form-row">
             <div class="form-group">
+              <label for="f-project">Project</label>
+              <select id="f-project"><option value="">None (standalone)</option>${projectOpts}</select>
+              <div class="hint">Link this prompt to a project for root-path execution and session tracking.</div>
+            </div>
+            <div class="form-group">
+              <label for="f-session-mode">Session Mode</label>
+              <select id="f-session-mode">
+                <option value="">New Session</option>
+                <option value="latest" ${sessionMode === "latest" ? "selected" : ""}>Resume Latest</option>
+                <option value="resume" ${sessionMode === "resume" ? "selected" : ""}>Resume Specific</option>
+              </select>
+            </div>
+          </div>
+          <div id="session-selector-row" class="form-group ${sessionMode === "resume" ? "" : "hidden"}">
+            <label for="f-session-id">Session to Resume</label>
+            <select id="f-session-id"><option value="">Loading...</option></select>
+          </div>
+          <div class="form-row">
+            <div class="form-group">
               <label for="f-timeout">Timeout (ms)</label>
               <input id="f-timeout" type="number" value="600000" min="10000" step="10000">
             </div>
@@ -446,6 +478,39 @@ function renderSubmit() {
 
   document.getElementById("submit-form")?.addEventListener("submit", handleSubmit);
   document.getElementById("prompt-actions")?.addEventListener("click", handlePromptAction);
+
+  document.getElementById("f-project")?.addEventListener("change", (e) => {
+    currentProjectId = e.target.value || null;
+    if (currentProjectId) loadSessionsForProject(currentProjectId);
+  });
+
+  document.getElementById("f-session-mode")?.addEventListener("change", async (e) => {
+    sessionMode = e.target.value;
+    const row = document.getElementById("session-selector-row");
+    if (sessionMode === "resume") {
+      row?.classList.remove("hidden");
+      const pid = document.getElementById("f-project").value;
+      if (pid) await loadSessionsForProject(pid);
+    } else {
+      row?.classList.add("hidden");
+    }
+  });
+
+  // Load sessions if project is pre-selected
+  if (currentProjectId) loadSessionsForProject(currentProjectId);
+}
+
+async function loadSessionsForProject(projectId) {
+  const sel = document.getElementById("f-session-id");
+  if (!sel) return;
+  try {
+    sessions = await api("GET", `/api/sessions?projectId=${projectId}`);
+    sel.innerHTML = sessions.length
+      ? sessions.map((s) => `<option value="${s.sessionId}">${s.sessionId} (${fmtTime(s.createdAt)})</option>`).join("")
+      : `<option value="">No sessions yet</option>`;
+  } catch (_) {
+    sel.innerHTML = `<option value="">Error loading sessions</option>`;
+  }
 }
 
 async function handlePromptAction(e) {
@@ -497,6 +562,7 @@ async function handleSubmit(e) {
   const tags = tagsRaw ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean) : [];
 
   try {
+    const projectId = document.getElementById("f-project")?.value || currentProjectId || undefined;
     const body = {
       title: document.getElementById("f-title").value.trim(),
       prompt: document.getElementById("f-prompt").value.trim(),
@@ -504,8 +570,12 @@ async function handleSubmit(e) {
       timeoutMs: parseInt(document.getElementById("f-timeout").value),
       maxRetries: parseInt(document.getElementById("f-retries").value),
       tags,
+      projectId,
+      sessionMode: document.getElementById("f-session-mode")?.value || undefined,
     };
-    if (currentProjectId) body.projectId = currentProjectId;
+    if (body.sessionMode === "resume") {
+      body.sessionId = document.getElementById("f-session-id")?.value || undefined;
+    }
 
     const job = await api("POST", "/api/jobs", body);
     showToast(`Job ${job.id} created`, "success");
@@ -590,6 +660,44 @@ async function viewLog(id) {
   } catch (err) {
     bodyEl.textContent = "Error: " + err.message;
   }
+}
+
+async function viewDetail(id) {
+  const job = jobs.find((j) => j.id === id);
+  if (!job) { showToast("Job not found", "error"); return; }
+  const project = job.projectId ? projects.find((p) => p.id === job.projectId) : null;
+
+  const titleEl = document.getElementById("log-title");
+  const bodyEl = document.getElementById("log-body");
+  const modal = document.getElementById("log-modal");
+
+  titleEl.textContent = `Prompt Detail — ${job.id}`;
+  bodyEl.innerHTML = `
+    <strong>Title:</strong> ${h(job.title)}
+    <strong>Status:</strong> ${job.status}
+    <strong>Model:</strong> ${job.model || "default"}
+    <strong>Project:</strong> ${project ? h(project.name) : "none"}
+    <strong>Session:</strong> ${job.sessionId || "none"} (${job.sessionMode || "new"})
+    <strong>Attempt:</strong> ${job.attempt + 1} / ${job.maxRetries + 1}
+    <strong>Tags:</strong> ${job.tags?.length ? job.tags.map((t) => h(t)).join(", ") : "none"}
+    <strong>Created:</strong> ${fmtTime(job.createdAt)}
+    <strong>Started:</strong> ${fmtTime(job.startedAt)}
+    <strong>Completed:</strong> ${fmtTime(job.completedAt)}
+    <strong>Error:</strong> ${job.error ? h(job.error) : "none"}
+    <hr style="border-color:var(--border);margin:12px 0">
+    <strong>Prompt:</strong>
+    <pre style="white-space:pre-wrap;margin-top:4px;font-family:var(--mono);font-size:12px">${h(job.prompt)}</pre>
+  `;
+  modal.classList.remove("hidden");
+}
+
+async function duplicateJob(id) {
+  try {
+    const dup = await api("POST", `/api/jobs/${id}/duplicate`);
+    showToast(`Duplicated as ${dup.id}`, "success");
+    await loadJobs();
+    updateView();
+  } catch (err) { showToast(err.message, "error"); }
 }
 
 // ── Log modal ───────────────────────────────────────────────────────

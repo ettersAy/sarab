@@ -161,16 +161,23 @@ export class QueueManager extends EventEmitter {
       // Resolve project cwd
       if (job.projectId && this.projectStore) {
         const project = this.projectStore.get(job.projectId);
-        if (project) execInput.cwd = project.rootPath;
+        if (project) {
+          execInput.cwd = project.rootPath;
+          logger.debug(`Running from project root: ${project.rootPath}`);
+        }
       }
 
       // Resolve session
       if (this.sessionStore) {
         if (job.sessionMode === "resume" && job.sessionId) {
           execInput.sessionId = job.sessionId;
+          logger.debug(`Resuming session: ${job.sessionId}`);
         } else if (job.sessionMode === "latest" || (job.sessionMode === "resume" && !job.sessionId)) {
           const latest = this.sessionStore.getLatestForProject(job.projectId ?? null);
-          if (latest) execInput.sessionId = latest.sessionId;
+          if (latest) {
+            execInput.sessionId = latest.sessionId;
+            logger.debug(`Resuming latest session: ${latest.sessionId}`);
+          }
         }
       }
 

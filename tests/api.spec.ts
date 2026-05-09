@@ -208,8 +208,183 @@ test.describe("Prompt improvement", () => {
       const res = await request.post("/api/prompt/improve", {
         data: { prompt: "Write a function", action },
       });
-      // 200 if claude is available, 502 if not — both are valid responses
       expect([200, 502]).toContain(res.status());
     });
   }
+});
+
+// ── Projects ──────────────────────────────────────────────────
+test.describe("Projects", () => {
+  let projectId: string;
+
+  test.afterEach(async ({ request }) => {
+    if (projectId) {
+      try { await request.delete(`/api/projects/${projectId}`); } catch (_) {}
+    }
+  });
+
+  test("list returns empty initially", async ({ request }) => {
+    const res = await request.get("/api/projects");
+    expect(res.status()).toBe(200);
+    expect(await res.json()).toEqual([]);
+  });
+
+  test("create returns 201", async ({ request }) => {
+    const res = await request.post("/api/projects", {
+      data: { name: "Test Project", rootPath: "/tmp" },
+    });
+    expect(res.status()).toBe(201);
+    const p = await res.json();
+    expect(p.name).toBe("Test Project");
+    expect(p.rootPath).toBe("/tmp");
+    projectId = p.id;
+  });
+
+  test("get returns project", async ({ request }) => {
+    const create = await request.post("/api/projects", {
+      data: { name: "Get Test", rootPath: "/tmp" },
+    });
+    projectId = (await create.json()).id;
+    const res = await request.get(`/api/projects/${projectId}`);
+    expect(res.status()).toBe(200);
+  });
+
+  test("validates rootPath exists", async ({ request }) => {
+    const res = await request.post("/api/projects", {
+      data: { name: "Bad Path", rootPath: "/nonexistent/path/xyz" },
+    });
+    expect(res.status()).toBe(400);
+  });
+
+  test("rejects duplicate names", async ({ request }) => {
+    await request.post("/api/projects", {
+      data: { name: "Dup Test", rootPath: "/tmp" },
+    });
+    const res = await request.post("/api/projects", {
+      data: { name: "Dup Test", rootPath: "/tmp" },
+    });
+    expect(res.status()).toBe(400);
+  });
+
+  test("update changes name", async ({ request }) => {
+    const create = await request.post("/api/projects", {
+      data: { name: "Old Name", rootPath: "/tmp" },
+    });
+    projectId = (await create.json()).id;
+    const res = await request.put(`/api/projects/${projectId}`, {
+      data: { name: "New Name" },
+    });
+    expect(res.status()).toBe(200);
+    expect((await res.json()).name).toBe("New Name");
+  });
+
+  test("delete removes project", async ({ request }) => {
+    const create = await request.post("/api/projects", {
+      data: { name: "Delete Me", rootPath: "/tmp" },
+    });
+    projectId = (await create.json()).id;
+    const res = await request.delete(`/api/projects/${projectId}`);
+    expect(res.status()).toBe(200);
+    expect((await res.json()).deleted).toBe(true);
+  });
+
+  test("job linked to project appears in project jobs", async ({ request }) => {
+    const pRes = await request.post("/api/projects", {
+      data: { name: "Job Test", rootPath: "/tmp" },
+    });
+    projectId = (await pRes.json()).id;
+    const jRes = await request.post("/api/jobs", {
+      data: { title: "Project job", prompt: "Test", projectId },
+    });
+    const jobId = (await jRes.json()).id;
+
+    const jobsRes = await request.get(`/api/projects/${projectId}/jobs`);
+    expect(jobsRes.status()).toBe(200);
+    const jobs = await jobsRes.json();
+    expect(jobs.some((j: any) => j.id === jobId)).toBe(true);
+
+    // Cleanup
+    await request.post(`/api/jobs/${jobId}/cancel`);
+    await request.delete(`/api/jobs/${jobId}`);
+  });
+});
+
+// ── Prompt management ─────────────────────────────────────────
+test.describe("Prompt management", () => {
+  let jobId: string;
+
+  test.beforeEach(async ({ request }) => {
+    const res = await request.post("/api/jobs", {
+      data: { title: "PM Test", prompt: "Hello", maxRetries: 0, timeoutMs: 30000 },
+    });
+    jobId = (await res.json()).id;
+  });
+
+  test.afterEach(async ({ request }) => {
+    try { await request.post(`/api/jobs/${jobId}/cancel`); } catch (_) {}
+    try { await request.delete(`/api/jobs/${jobId}`); } catch (_) {}
+  });
+
+  test("PATCH updates job title", async ({ request }) => {
+    const res = await request.patch(`/api/jobs/${jobId}`, {
+      data: { title: "Updated Title" },
+    });
+    expect(res.status()).toBe(200);
+    expect((await res.json()).title).toBe("Updated Title");
+  });
+
+  test("POST /duplicate creates copy", async ({ request }) => {
+    const res = await request.post(`/api/jobs/${jobId}/duplicate`);
+    expect(res.status()).toBe(201);
+    const dup = await res.json();
+    expect(dup.id).not.toBe(jobId);
+    expect(dup.title).toContain("(copy)");
+    // Cleanup
+    try { await request.post(`/api/jobs/${dup.id}/cancel`); } catch (_) {}
+    try { await request.delete(`/api/jobs/${dup.id}`); } catch (_) {}
+  });
+
+  test("GET /detail returns full detail", async ({ request }) => {
+    const res = await request.get(`/api/jobs/${jobId}/detail`);
+    expect(res.status()).toBe(200);
+    const data = await res.json();
+    expect(data.job.id).toBe(jobId);
+    expect("logContent" in data).toBe(true);
+  });
+
+  test("create accepts projectId", async ({ request }) => {
+    const pRes = await request.post("/api/projects", {
+      data: { name: "JobProj", rootPath: "/tmp" },
+    });
+    const pid = (await pRes.json()).id;
+    const res = await request.post("/api/jobs", {
+      data: { title: "Projected", prompt: "Hi", projectId: pid, maxRetries: 0, timeoutMs: 30000 },
+    });
+    expect(res.status()).toBe(201);
+    expect((await res.json()).projectId).toBe(pid);
+    // Cleanup
+    const jid = (await res.json()).id;
+    try { await request.post(`/api/jobs/${jid}/cancel`); } catch (_) {}
+    try { await request.delete(`/api/jobs/${jid}`); } catch (_) {}
+    try { await request.delete(`/api/projects/${pid}`); } catch (_) {}
+  });
+});
+
+// ── Sessions ──────────────────────────────────────────────────
+test.describe("Sessions", () => {
+  test("list returns empty initially", async ({ request }) => {
+    const res = await request.get("/api/sessions");
+    expect(res.status()).toBe(200);
+    expect(await res.json()).toEqual([]);
+  });
+
+  test("latest returns 404 when no sessions exist", async ({ request }) => {
+    const res = await request.get("/api/sessions/latest");
+    expect(res.status()).toBe(404);
+  });
+
+  test("get by id returns 404 for missing", async ({ request }) => {
+    const res = await request.get("/api/sessions/nonexistent");
+    expect(res.status()).toBe(404);
+  });
 });
