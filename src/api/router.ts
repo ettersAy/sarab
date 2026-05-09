@@ -11,6 +11,7 @@ import { createQueueRouter } from "./queue.js";
 import { createPromptRouter } from "./prompt.js";
 import { createSessionsRouter } from "./sessions.js";
 import { createProjectsRouter } from "./projects.js";
+import { createSettingsRouter } from "./settings.js";
 
 export function createApiRouter(
   jobStore: JobStore,
@@ -29,6 +30,7 @@ export function createApiRouter(
   router.use("/prompt", createPromptRouter(promptExecutor ?? executor));
   router.use("/sessions", createSessionsRouter(sessionStore));
   router.use("/projects", createProjectsRouter(projectStore, jobStore, sessionStore));
+  router.use("/settings", createSettingsRouter(settingsStore));
 
   return router;
 }

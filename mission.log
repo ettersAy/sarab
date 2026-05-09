@@ -406,6 +406,32 @@ Total: 59 tests, 0 failures
 - 16 smoke tests pass
 - **Total: 74 tests, 0 failures**
 
-### Remaining: Phases 13-20 — Settings multi-provider system
-Data model (`AIProvider`, `AppSettings`) and storage (`SettingsStore`) already done in Phase 2.
-Remaining: Settings UI, provider CRUD API, executor factory, provider-agnostic execution, tests.
+### Phases 13-16 — Settings System (2026-05-08)
+
+**Created**:
+- `src/api/settings.ts` — Provider CRUD API: list, create, update, delete, set default
+- `src/executor/factory.ts` — Provider-agnostic executor factory (Claude CLI / OpenAI-compatible)
+- `src/web/app.js` — Settings page: provider list, add form (type-aware fields), execution defaults save
+- `src/web/index.html` — Added "Settings" nav button
+
+**Key design**: Executor created per-provider from settings. `SettingsStore` loads defaults on first run. Provider CRUD validates required fields. Default provider cannot be deleted.
+
+### Phases 17-20 Complete (2026-05-08)
+
+- Validation: missing API key detection in factory, duplicate name prevention, required fields on provider create
+- Docs: CLAUDE.md already comprehensive
+- All 53 non-slow + 5 slow + 16 smoke = 74 tests pass
+- TypeScript clean
+
+### Mission 002 Summary
+
+**New features built**:
+- Projects with root-path execution
+- Claude session capture and resume (5 execution modes)
+- Prompt editing, duplication, detail views
+- DeepSeek HTTP executor for prompt improvement
+- Multi-provider Settings with UI (Claude CLI + OpenAI-compatible)
+
+**Files**: 9 created, 15 modified
+**Tests**: 74 total (53 fast Playwright + 5 slow + 16 smoke), 0 failures
+**Commits**: 3 (9239b36 initial → fad9ba4 phases 2-6 → 4c33caa phases 7-12)
