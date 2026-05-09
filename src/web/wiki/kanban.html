@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kanban Board — SARAB Wiki</title>
+<link rel="stylesheet" href="/wiki/wiki.css">
+</head>
+<body>
+<nav>
+  <div class="wiki-logo"><a href="/wiki/">SARAB Wiki</a></div>
+  <div class="nav-section">Overview</div>
+  <a href="/wiki/">Home</a>
+  <a href="/wiki/architecture.html">Architecture</a>
+  <div class="nav-section">Features</div>
+  <a href="/wiki/execution.html">Execution & Heartbeat</a>
+  <a href="/wiki/kanban.html" class="active">Kanban Board</a>
+  <a href="/wiki/chatbot.html">Project Chatbot</a>
+  <a href="/wiki/persistence.html">Persistence</a>
+  <a href="/wiki/settings.html">Settings & Providers</a>
+  <div class="nav-section">Reference</div>
+  <a href="/wiki/api-reference.html">API Reference</a>
+  <div class="nav-section">Guides</div>
+  <a href="/wiki/testing.html">Testing</a>
+  <a href="/wiki/development.html">Development</a>
+  <div class="nav-section">Links</div>
+  <a href="/" target="_blank">Open App &#8599;</a>
+  <a href="https://github.com/ettersAy/sarab" target="_blank">GitHub &#8599;</a>
+</nav>
+<main>
+
+<h1>Kanban Board</h1>
+
+<p>The Kanban board is a ticket-management interface within SARAB that models work items through a six-column workflow. Tickets can be created, edited, moved, deleted, and run as Claude jobs. The board supports project filtering, subtickets with parent-child relationships, drag-and-drop reordering, and color-coded priority indicators.</p>
+
+<h2>Column Workflow</h2>
+
+<p>Every ticket belongs to exactly one of six columns, representing a linear workflow from ideation to completion:</p>
+
+<table>
+  <tr><th>Column</th><th>Purpose</th></tr>
+  <tr><td><code>backlog</code></td><td>Unsorted ideas and unplanned work. Default column for new tickets.</td></tr>
+  <tr><td><code>ready</code></td><td>Triaged and ready to pick up. Has clear scope and acceptance criteria.</td></tr>
+  <tr><td><code>in-progress</code></td><td>Actively being worked on. A Claude job may be linked.</td></tr>
+  <tr><td><code>paused</code></td><td>Blocked or set aside. Can be resumed later without losing context.</td></tr>
+  <tr><td><code>testing</code></td><td>Awaiting verification. Job output is being reviewed.</td></tr>
+  <tr><td><code>done</code></td><td>Completed and verified. Terminal state.</td></tr>
+</table>
+
+<p>Tickets are moved between columns via drag-and-drop on the board or through the Move action in the card toolbar. The <code>/api/tickets/:id/move</code> endpoint handles column transitions server-side.</p>
+
+<h2>Priorities</h2>
+
+<p>Each ticket carries a priority level displayed as a color-coded left border on the card. Priorities are set at creation time and can be changed on edit.</p>
+
+<table>
+  <tr><th>Priority</th><th>CSS Class</th><th>Border Color</th></tr>
+  <tr><td><code>critical</code></td><td><code>prio-critical</code></td><td style="color:var(--red)">Red</td></tr>
+  <tr><td><code>high</code></td><td><code>prio-high</code></td><td style="color:var(--orange)">Orange</td></tr>
+  <tr><td><code>medium</code></td><td><code>prio-medium</code></td><td style="color:var(--yellow)">Yellow</td></tr>
+  <tr><td><code>low</code></td><td><code>prio-low</code></td><td style="color:var(--text-dim)">Dim (gray)</td></tr>
+</table>
+
+<p>The type definition is <code>TicketPriority = "low" | "medium" | "high" | "critical"</code>, defined in <code>src/queue/types.ts</code>.</p>
+
+<h2>Ticket CRUD</h2>
+
+<h3>Create</h3>
+<p>The "New Ticket" button opens a form modal with fields for title, description (markdown), priority, column, project association, and tags. Subtickets can be created from a parent card via the "+Sub" button, which pre-populates the <code>parentId</code>. The POST payload is sent to <code>/api/tickets</code>. On success the board refreshes via SSE.</p>
+
+<h3>Edit</h3>
+<p>The "Edit" button on each card opens a pre-filled form modal. Changes are sent via PATCH to <code>/api/tickets/:id</code>. All fields except <code>id</code> are mutable.</p>
+
+<h3>Move</h3>
+<p>Tickets are moved by dragging a card and dropping it onto a different column. The drop handler calls <code>POST /api/tickets/:id/move</code> with the target column name. A "Move" button is also provided in the card toolbar as a fallback when drag-and-drop is impractical.</p>
+
+<h3>Delete</h3>
+<p>"Del" sends <code>DELETE /api/tickets/:id</code>. The server cascades deletion to all subtickets (children with matching <code>parentId</code>) and cleans up any linked markdown files. A confirmation step is handled on the frontend before the request is sent.</p>
+
+<h3>Run</h3>
+<p>"Run" converts a ticket into a Claude job. The frontend sends a POST to <code>/api/jobs</code> with the ticket's title as the job title and the description as the prompt. The resulting <code>jobId</code> is patched back onto the ticket via <code>PATCH /api/tickets/:id</code>. The ticket card then displays a clickable "Job: &lt;id&gt;" badge linking to the job in the queue view. The job is also tagged with <code>"kanban"</code> for traceability.</p>
+
+<h2>Subtickets</h2>
+
+<p>Subtickets implement a parent-child hierarchy via the <code>parentId</code> field on each ticket:</p>
+
+<ul>
+  <li><strong>Parent reference</strong>: A subticket's <code>parentId</code> is set to the parent ticket's <code>id</code>.</li>
+  <li><strong>Badge display</strong>: Parent cards show a count badge (e.g., "3 sub") in the meta section.</li>
+  <li><strong>Indented children</strong>: Subtickets are rendered below the parent card, visually indented with a left border accent. Each subticket is itself a draggable card with its own action toolbar.</li>
+  <li><strong>Child tag</strong>: Subticket cards display a "Child" tag so they are distinguishable from top-level tickets.</li>
+  <li><strong>+Sub button</strong>: Opens a modal with <code>parentId</code> pre-filled. The form otherwise behaves identically to a top-level ticket create.</li>
+  <li><strong>Cascade delete</strong>: Deleting a parent ticket deletes all its subtickets.</li>
+</ul>
+
+<p>The frontend renders subtickets by filtering <code>tickets.filter(st => st.parentId === t.id)</code> at render time. There is no depth limit, but the UI only indents one level.</p>
+
+<h2>Markdown Persistence Format</h2>
+
+<p>Tickets are stored as both JSONL (cache) and individual markdown files under the project directory. The markdown format is human-readable and version-controlled alongside the project code.</p>
+
+<h3>File Location</h3>
+<p><code>&lt;projects-root&gt;/&lt;project-slug&gt;/tickets/&lt;column&gt;/&lt;slugified-title&gt;-&lt;8char-id&gt;.md</code></p>
+
+<h3>Format</h3>
+
+<pre><code>Title: Implement user authentication
+Kanban Status: in-progress
+Priority: high
+Project: proj_abc123
+Parent:
+Job: job_xyz789
+Session:
+Tags: auth, security
+Created: 2026-05-09T10:00:00.000Z
+Updated: 2026-05-09T14:30:00.000Z
+Started: 2026-05-09T10:05:00.000Z
+Paused:
+Done:
+Ticket ID: a1b2c3d4
+========================================
+Content:
+## Acceptance Criteria
+- [ ] User can register with email + password
+- [ ] User can log in
+- [ ] Session tokens expire after 24 hours
+
+## Notes
+Uses JWT stored in httpOnly cookies.
+</code></pre>
+
+<p>The markdown header uses <code>Key: Value</code> lines terminated by a <code>===</code> divider. The <code>Content:</code> section holds the free-form markdown description. Serialization and deserialization are handled by <code>src/storage/md-serializer.ts</code>.</p>
+
+<h2>Project Filtering</h2>
+
+<p>A project filter dropdown sits at the top of the board. When a project is selected, only tickets with a matching <code>projectId</code> are displayed. The filter value is stored in the <code>kanbanProjectId</code> global variable and passed as a query parameter to <code>GET /api/tickets?projectId=...</code>. Setting the filter to "All Projects" clears the parameter and returns every ticket.</p>
+
+<h2>Run Ticket Flow (detailed)</h2>
+
+<pre><code>User clicks "Run" on ticket
+  → POST /api/jobs { title, prompt: t.description, projectId, tags: [..., "kanban"] }
+  → Server creates Job, returns { id: "job_xxx" }
+  → PATCH /api/tickets/:id { jobId: "job_xxx" }
+  → Board refreshes, card shows "Job: job_xxx" badge
+  → QueueManager picks up the job, executor spawns claude CLI
+  → Job output streams via SSE; ticket remains on board</code></pre>
+
+<p>The prompt sent to Claude is the ticket's <code>description</code> field (markdown content), falling back to the <code>title</code>. The resulting job is linked bidirectionally: the ticket stores <code>jobId</code>, and the job can be inspected from the queue view via the badge link.</p>
+
+<h2>API Endpoints</h2>
+
+<table>
+  <tr><th>Method</th><th>Path</th><th>Action</th></tr>
+  <tr><td>GET</td><td><code>/api/tickets</code></td><td>List all tickets, optional <code>?projectId=</code> filter</td></tr>
+  <tr><td>POST</td><td><code>/api/tickets</code></td><td>Create a new ticket</td></tr>
+  <tr><td>PATCH</td><td><code>/api/tickets/:id</code></td><td>Update ticket fields</td></tr>
+  <tr><td>DELETE</td><td><code>/api/tickets/:id</code></td><td>Delete ticket + subtickets</td></tr>
+  <tr><td>POST</td><td><code>/api/tickets/:id/move</code></td><td>Move to another column</td></tr>
+</table>
+
+<h2>Frontend Module</h2>
+
+<p>The Kanban board is implemented in <code>src/web/js/views/kanban.js</code> as a vanilla JS view within the SARAB single-page application. Key functions:</p>
+
+<ul>
+  <li><code>loadTickets()</code> — fetches tickets from <code>/api/tickets</code> with optional project filter.</li>
+  <li><code>renderKanban()</code> — builds the board DOM: column headers with ticket counts, card grids, drag-drop zones, project filter, and action buttons.</li>
+  <li><code>renderTicketCard(t)</code> — renders a single card with priority border, title, description excerpt, meta tags, action buttons, and indented subtickets.</li>
+  <li><code>showTicketForm()</code> / <code>showEditTicketForm(id)</code> — modal create and edit forms.</li>
+  <li><code>showSubticketForm(parentId)</code> — modal for creating a child ticket.</li>
+  <li><code>bindTicketActions()</code> — wires edit, run, subticket, and delete button handlers.</li>
+  <li><code>bindKanbanDrag()</code> — sets up HTML drag-and-drop on <code>.kanban-card</code> elements with column drop zones.</li>
+</ul>
+
+<p>The board data is polled via the shared SSE connection, which emits update events that trigger a <code>loadTickets()</code> + <code>renderKanban()</code> cycle.</p>
+
+<footer>
+  <p><a href="/wiki/">Home</a> &middot; <a href="/wiki/development.html">Development Guide</a></p>
+</footer>
+</main>
+</body>
+</html>

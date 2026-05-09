@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Project Chatbot — SARAB Wiki</title>
+<link rel="stylesheet" href="/wiki/wiki.css">
+</head>
+<body>
+<nav>
+  <div class="wiki-logo"><a href="/wiki/">SARAB Wiki</a></div>
+  <div class="nav-section">Overview</div>
+  <a href="/wiki/">Home</a>
+  <a href="/wiki/architecture.html">Architecture</a>
+  <div class="nav-section">Features</div>
+  <a href="/wiki/execution.html">Execution & Heartbeat</a>
+  <a href="/wiki/kanban.html">Kanban Board</a>
+  <a href="/wiki/chatbot.html" class="active">Project Chatbot</a>
+  <a href="/wiki/persistence.html">Persistence</a>
+  <a href="/wiki/settings.html">Settings & Providers</a>
+  <div class="nav-section">Reference</div>
+  <a href="/wiki/api-reference.html">API Reference</a>
+  <div class="nav-section">Guides</div>
+  <a href="/wiki/testing.html">Testing</a>
+  <a href="/wiki/development.html">Development</a>
+  <div class="nav-section">Links</div>
+  <a href="/" target="_blank">Open App &#8599;</a>
+  <a href="https://github.com/ettersAy/sarab" target="_blank">GitHub &#8599;</a>
+</nav>
+<main>
+
+<h1>Project Chatbot</h1>
+
+<p>SARAB's project chatbot lets you ask natural-language questions about any registered project. The AI answers using the project's own documentation files as context — no more digging through folders to find that one config file or architectural note.</p>
+
+<h2>How It Works</h2>
+
+<ol>
+  <li><strong>Select a project</strong> — pick from the project dropdown in the chatbot view.</li>
+  <li><strong>Ask a question</strong> — type any question about the project's purpose, structure, or configuration.</li>
+  <li><strong>AI answers with context</strong> — the backend loads the project's context files, builds a prompt combining the question + file contents + conversation history, and sends it to the configured AI provider (same provider used for job execution).</li>
+</ol>
+
+<div class="callout success">
+  <strong>Fixed: multi-turn conversation.</strong> Earlier versions only sent the latest question to the AI with no chat history. The chat store now correctly persists the full conversation, and every turn includes prior messages in the prompt. The AI sees the entire exchange and can refer back to earlier context.
+</div>
+
+<h2>Context Loading</h2>
+
+<p>When a question is asked, the backend loads relevant context from the project before calling the AI. This is controlled by the <code>contextFiles</code> field in Project Settings.</p>
+
+<h3>Configuration</h3>
+
+<p>Each project can specify an array of glob patterns or file paths under <code>contextFiles</code> in its <code>project.json</code>:</p>
+
+<pre><code>{
+  "name": "my-project",
+  "rootPath": "/home/user/my-project",
+  "contextFiles": [
+    "README.md",
+    "ARCHITECTURE.md",
+    "docs/**/*.md",
+    "src/config.ts",
+    "package.json"
+  ]
+}</code></pre>
+
+<h3>Loading Logic</h3>
+
+<p>The <code>loadContextFiles()</code> function (<code>src/chatbot/context.ts</code>) resolves each pattern against the project's <code>rootPath</code>, expands globs, and reads matched files. The resolved file list is cached per project and re-scanned on each ask.</p>
+
+<h3>Safety Checks</h3>
+
+<p>Three guardrails prevent abuse:</p>
+
+<ul>
+  <li><strong>Path traversal blocked</strong> — any resolved path that escapes the project root directory is silently dropped. Symlinks are not followed outside the root.</li>
+  <li><strong>50 KB per file limit</strong> — files larger than 50 KB are truncated to 50 KB. A note is appended to the content indicating truncation.</li>
+  <li><strong>100 KB total context limit</strong> — if the combined content of all matched files exceeds 100 KB, files are included in order of match priority until the limit is reached. Excess files are noted in the prompt so the AI knows context was trimmed.</li>
+</ul>
+
+<h2>Multi-Turn Conversation</h2>
+
+<p>The chatbot maintains full conversation history. Each exchange is stored as a <code>ChatConversation</code> containing an ordered list of <code>ChatMessage</code> objects (role + content). On every ask:</p>
+
+<ol>
+  <li>The question is appended to the conversation's message list.</li>
+  <li>The backend constructs a system prompt from Project Settings (<code>templates.reflection</code>), prepends the loaded context, then appends the full message history.</li>
+  <li>The AI response is saved as a new assistant message in the conversation.</li>
+</ol>
+
+<div class="callout">
+  <strong>Context window note.</strong> Long conversations may exceed the AI provider's context window. The system clips history to the last 20 messages (10 turns) to stay within limits. This is configurable via <code>maxHistoryMessages</code> in the chatbot config.
+</div>
+
+<h2>Quick Actions</h2>
+
+<p>The chatbot view provides one-click quick action buttons for common questions. These work without typing:</p>
+
+<div class="feature-grid">
+  <div class="feature-card">
+    <h3>What is this project about?</h3>
+    <p>Summarizes the project's purpose from README and key docs.</p>
+  </div>
+  <div class="feature-card">
+    <h3>Summarize architecture</h3>
+    <p>Reads ARCHITECTURE.md and code structure to produce a high-level overview.</p>
+  </div>
+  <div class="feature-card">
+    <h3>Key files</h3>
+    <p>Lists the most important source files and what each does.</p>
+  </div>
+  <div class="feature-card">
+    <h3>How do I run this?</h3>
+    <p>Extracts setup, build, and test commands from docs and package.json.</p>
+  </div>
+  <div class="feature-card">
+    <h3>List dependencies</h3>
+    <p>Reads package.json and summarizes key runtime dependencies.</p>
+  </div>
+  <div class="feature-card">
+    <h3>Show me the config</h3>
+    <p>Loads configuration files and explains settings.</p>
+  </div>
+</div>
+
+<h2>Data Model</h2>
+
+<p>Chat data is stored in <code>src/storage/chatbot.ts</code> as JSONL files under the <code>.sarab/</code> directory.</p>
+
+<table>
+  <tr><th>Type</th><th>Fields</th><th>Description</th></tr>
+  <tr>
+    <td><code>ChatConversation</code></td>
+    <td><code>id</code>, <code>projectId</code>, <code>title</code>, <code>createdAt</code>, <code>updatedAt</code>, <code>messageCount</code></td>
+    <td>A single Q&A session tied to a project.</td>
+  </tr>
+  <tr>
+    <td><code>ChatMessage</code></td>
+    <td><code>id</code>, <code>conversationId</code>, <code>role</code> (<code>"user"</code> | <code>"assistant"</code>), <code>content</code>, <code>timestamp</code></td>
+    <td>Individual message within a conversation.</td>
+  </tr>
+</table>
+
+<p>Conversations are stored as a JSONL of <code>ChatConversation</code> records. Messages are stored in a separate JSONL file keyed by <code>conversationId</code>. This keeps message lookups fast without loading unrelated conversations.</p>
+
+<h2>API Endpoints</h2>
+
+<table>
+  <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+  <tr>
+    <td><span class="badge badge-post">POST</span></td>
+    <td><code>/api/chatbot/ask</code></td>
+    <td>Ask a question. Body: <code>{ projectId, conversationId?, question }</code>. Returns the AI response. Creates or resumes a conversation.</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-get">GET</span></td>
+    <td><code>/api/chatbot/conversations/:projectId</code></td>
+    <td>List all conversations for a project, sorted by <code>updatedAt</code> descending.</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-get">GET</span></td>
+    <td><code>/api/chatbot/messages/:conversationId</code></td>
+    <td>Get all messages for a conversation, ordered by timestamp ascending.</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-delete">DELETE</span></td>
+    <td><code>/api/chatbot/conversations/:conversationId</code></td>
+    <td>Delete a conversation and all its messages.</td>
+  </tr>
+</table>
+
+<h2>System Prompt Customization</h2>
+
+<p>The system prompt sent to the AI is built from the <code>templates.reflection</code> field in Project Settings. This lets you tailor the AI's behavior per project:</p>
+
+<pre><code>// Project Settings → templates.reflection
+"You are a helpful assistant with deep knowledge of this project. "
+"Answer questions about the codebase, architecture, and configuration. "
+"Be concise but thorough. Use code snippets when relevant."</code></pre>
+
+<p>If no custom template is set, a default system prompt is used that instructs the AI to answer factually based solely on the provided context files.</p>
+
+<h2>Backend Architecture</h2>
+
+<table>
+  <tr><th>File</th><th>Purpose</th></tr>
+  <tr><td><code>src/api/chatbot.ts</code></td><td>Router: ask, list conversations, list messages, delete conversation</td></tr>
+  <tr><td><code>src/storage/chatbot.ts</code></td><td>ChatStore: JSONL read/write for conversations and messages</td></tr>
+  <tr><td><code>src/chatbot/context.ts</code></td><td>Context loading: glob resolution, file reading, safety checks, prompt assembly</td></tr>
+  <tr><td><code>src/web/js/views/chatbot.js</code></td><td>Frontend view: project selector, chat UI, quick actions, conversation list</td></tr>
+</table>
+
+<footer>
+  <p><a href="/wiki/">Home</a> &middot; <a href="/wiki/development.html">Development Guide</a> &middot; <a href="/wiki/api-reference.html">API Reference</a></p>
+</footer>
+</main>
+</body>
+</html>

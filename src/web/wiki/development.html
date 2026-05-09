@@ -1,0 +1,138 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Development — SARAB Wiki</title>
+<link rel="stylesheet" href="/wiki/wiki.css">
+</head>
+<body>
+<nav>
+  <div class="wiki-logo"><a href="/wiki/">SARAB Wiki</a></div>
+  <div class="nav-section">Overview</div>
+  <a href="/wiki/">Home</a>
+  <a href="/wiki/architecture.html">Architecture</a>
+  <div class="nav-section">Features</div>
+  <a href="/wiki/execution.html">Execution & Heartbeat</a>
+  <a href="/wiki/kanban.html">Kanban Board</a>
+  <a href="/wiki/chatbot.html">Project Chatbot</a>
+  <a href="/wiki/persistence.html">Persistence</a>
+  <a href="/wiki/settings.html">Settings & Providers</a>
+  <div class="nav-section">Reference</div>
+  <a href="/wiki/api-reference.html">API Reference</a>
+  <div class="nav-section">Guides</div>
+  <a href="/wiki/testing.html">Testing</a>
+  <a href="/wiki/development.html" class="active">Development</a>
+  <div class="nav-section">Links</div>
+  <a href="/" target="_blank">Open App &#8599;</a>
+  <a href="https://github.com/ettersAy/sarab" target="_blank">GitHub &#8599;</a>
+</nav>
+<main>
+
+<h1>Development Guide</h1>
+
+<p>SARAB is a Node.js/Express application with a vanilla JS frontend, filesystem-backed storage, and zero external databases. This guide covers code organization, conventions, and common pitfalls.</p>
+
+<h2>Where to Change Code</h2>
+<table>
+  <tr><th>Feature</th><th>Files</th></tr>
+  <tr><td>Job lifecycle</td><td><code>src/queue/manager.ts</code>, <code>src/executor/claude.ts</code></td></tr>
+  <tr><td>Job API endpoints</td><td><code>src/api/jobs.ts</code>, <code>src/api/router.ts</code></td></tr>
+  <tr><td>Projects & sessions</td><td><code>src/storage/projects.ts</code>, <code>src/storage/sessions.ts</code>, <code>src/api/projects.ts</code>, <code>src/api/sessions.ts</code></td></tr>
+  <tr><td>Settings & providers</td><td><code>src/storage/settings.ts</code>, <code>src/api/settings.ts</code>, <code>src/executor/factory.ts</code></td></tr>
+  <tr><td>Tickets (Kanban)</td><td><code>src/storage/tickets.ts</code>, <code>src/api/tickets.ts</code></td></tr>
+  <tr><td>Chatbot</td><td><code>src/chatbot/context.ts</code>, <code>src/api/chatbot.ts</code>, <code>src/storage/chatbot.ts</code></td></tr>
+  <tr><td>API endpoints</td><td><code>src/api/router.ts</code> + feature file in <code>src/api/</code></td></tr>
+  <tr><td>Storage format</td><td><code>src/storage/jobs.ts</code>, <code>src/queue/types.ts</code></td></tr>
+  <tr><td>SSE events</td><td><code>src/queue/sse.ts</code>, <code>src/queue/manager.ts</code></td></tr>
+  <tr><td>Frontend UI</td><td><code>src/web/js/</code> (state + views), <code>src/web/styles.css</code>, <code>src/web/index.html</code></td></tr>
+  <tr><td>Config & env</td><td><code>src/config.ts</code></td></tr>
+  <tr><td>Error handling</td><td><code>src/errors.ts</code></td></tr>
+  <tr><td>Logging</td><td><code>src/logger.ts</code></td></tr>
+  <tr><td>Entry point & DI</td><td><code>src/server.ts</code></td></tr>
+  <tr><td>FS utilities</td><td><code>src/storage/fs-utils.ts</code></td></tr>
+  <tr><td>Markdown serialization</td><td><code>src/storage/md-serializer.ts</code></td></tr>
+</table>
+
+<h2>Code Conventions</h2>
+<ul>
+  <li><strong>One concern per file.</strong> Each module has a single responsibility. Storage, API routes, executors, and views each live in their own files.</li>
+  <li><strong>AppError hierarchy.</strong> All thrown errors extend <code>AppError</code>. Raw <code>new Error</code> is never used for operational errors. Hierarchy: <code>AppError</code> &rarr; <code>NotFoundError</code> (404), <code>ValidationError</code> (400). Express error middleware catches all <code>AppError</code> instances and returns structured JSON responses.</li>
+  <li><strong>Config defaults flow from <code>src/config.ts</code>.</strong> Environment variables are read in one place and passed to constructors — never hardcoded in multiple locations.</li>
+  <li><strong>Vanilla JS frontend.</strong> No React, no bundler, no build step. The frontend is plain JS served as static files from <code>src/web/</code>. State management is global (<code>currentView</code>, <code>jobs[]</code>, etc.) — no reactive framework.</li>
+  <li><strong>API routes use factory functions.</strong> Each route module exports <code>createXxxRouter(dep1, dep2)</code> returning an Express <code>Router</code>. Dependencies are injected at wiring time.</li>
+  <li><strong>SSE events use named types:</strong> <code>job-started</code>, <code>job-completed</code>, <code>job-failed</code>, <code>job-cancelled</code>, <code>job-retrying</code>, <code>stats</code>.</li>
+</ul>
+
+<h2>No TypeScript in JS Files</h2>
+<p>All frontend code in <code>src/web/</code> must be valid plain JavaScript. TypeScript annotations (<code>: any</code>, <code>: string</code>, etc.) are forbidden. The <code>node -c</code> check in <code>run-all-tests.sh</code> validates this on every full test run.</p>
+<pre><code># Verify JS syntax:
+node -c src/web/js/core.js
+node -c src/web/js/views/queue.js</code></pre>
+
+<h2>Dependency Injection</h2>
+<p>DI is manual and linear — no container, no decorators. All wiring happens in <code>src/server.ts</code>:</p>
+<pre><code>// Pseudocode for the wiring pattern
+const stores = { jobStore, projectStore, sessionStore, settingsStore };
+const sseManager = new SSEManager();
+const claudeExecutor = new ClaudeExecutor(config, sseManager);
+const queueManager = new QueueManager(stores, claudeExecutor, sseManager);
+
+const app = express();
+app.use("/api/jobs", createJobRouter(jobStore, queueManager));
+app.use("/api/projects", createProjectRouter(projectStore, jobStore));</code></pre>
+
+<h2>Frontend Modules</h2>
+<p>Ten files under <code>src/web/js/</code>, loaded as static scripts in <code>index.html</code>:</p>
+<table>
+  <tr><th>File</th><th>Purpose</th></tr>
+  <tr><td><code>js/core.js</code></td><td>State, routing, SSE client, API helpers, error boundary, app init</td></tr>
+  <tr><td><code>js/actions.js</code></td><td>Job actions: cancel, retry, stop, resume, edit, view log, delete, duplicate</td></tr>
+  <tr><td><code>js/modals.js</code></td><td>Modal close handlers: escape key, overlay clicks</td></tr>
+  <tr><td><code>js/views/dashboard.js</code></td><td>Stats cards, recent jobs, Kanban overview</td></tr>
+  <tr><td><code>js/views/queue.js</code></td><td>Job list table, filters, search, pagination, heartbeat indicators</td></tr>
+  <tr><td><code>js/views/submit.js</code></td><td>New prompt form, prompt improvement with undo, session mode selection</td></tr>
+  <tr><td><code>js/views/projects.js</code></td><td>Project CRUD, detail view with session list</td></tr>
+  <tr><td><code>js/views/kanban.js</code></td><td>Board with columns, tickets, drag-and-drop, subtickets</td></tr>
+  <tr><td><code>js/views/chatbot.js</code></td><td>Multi-turn Q&A with quick actions, project selector</td></tr>
+  <tr><td><code>js/views/settings.js</code></td><td>Provider management, execution + idle timeout defaults</td></tr>
+</table>
+
+<h2>Environment Variables</h2>
+<table>
+  <tr><th>Variable</th><th>Default</th><th>Purpose</th></tr>
+  <tr><td><code>PORT</code></td><td><code>3457</code></td><td>HTTP server port</td></tr>
+  <tr><td><code>SARAB_DATA_DIR</code></td><td><code>./data</code></td><td>Data directory for JSONL, markdown, logs</td></tr>
+  <tr><td><code>CLAUDE_CMD</code></td><td><code>claude</code></td><td>Path to the Claude CLI binary</td></tr>
+  <tr><td><code>CLAUDE_FLAGS</code></td><td><code>--dangerously-skip-permissions</code></td><td>Extra flags for the Claude CLI invocation</td></tr>
+  <tr><td><code>SARAB_TIMEOUT</code></td><td><code>0</code> (no timeout)</td><td>Default job timeout in milliseconds</td></tr>
+  <tr><td><code>SARAB_IDLE_TIMEOUT</code></td><td><code>1800000</code> (30 min)</td><td>Default idle heartbeat timeout in milliseconds</td></tr>
+  <tr><td><code>SARAB_MAX_RETRIES</code></td><td><code>2</code></td><td>Default maximum retry count for failed jobs</td></tr>
+  <tr><td><code>SARAB_POLL_INTERVAL</code></td><td><code>5000</code></td><td>Queue poll loop interval in milliseconds</td></tr>
+  <tr><td><code>SARAB_CONCURRENCY</code></td><td><code>1</code></td><td>Number of jobs processed concurrently</td></tr>
+</table>
+
+<h2>Known Pitfalls</h2>
+<ul>
+  <li><strong>JSONL scaling:</strong> <code>JobStore.list()</code> reads the entire file into memory on every call. Fine for &lt;1000 jobs, degrades linearly beyond that. No database — just JSONL and markdown files.</li>
+  <li><strong>Single-threaded queue:</strong> Only one Claude invocation runs at a time by default (<code>SARAB_CONCURRENCY=1</code>). Increasing concurrency may cause resource contention.</li>
+  <li><strong>SSE curl hangs:</strong> SSE endpoints never close the connection. Always use <code>--max-time N</code> when curling SSE endpoints in scripts or tests.</li>
+  <li><strong>Job cancel race:</strong> The queue poll loop may pick up a job between your cancel request and when it processes. Pause the queue first (<code>POST /api/queue/pause</code>) in tests before manipulating pending jobs.</li>
+  <li><strong>Playwright worker conflict:</strong> Two parallel workers can collide on JSONL writes. The uuid-based temp file naming prevents corruption, but the config forces <code>workers: 1</code> to avoid interference.</li>
+  <li><strong>Port in tests:</strong> Smoke tests pass <code>PORT</code> via env (<code>env PORT=XXXX npx tsx src/server.ts</code>). The config reads <code>process.env.PORT</code>, not CLI arguments.</li>
+  <li><strong>TypeScript syntax in JS:</strong> Never write <code>: any</code> or other TS annotations in <code>src/web/</code> files. The <code>node -c</code> JS syntax check will reject them.</li>
+  <li><strong>Default provider cannot be deleted:</strong> The settings system requires at least one provider. Deleting the default provider returns a 400 error. Set another provider as default first.</li>
+</ul>
+
+<h2>Commit Style</h2>
+<p>Commits use concise messages focused on <em>why</em> rather than <em>what</em>. The format is a single sentence (or two) in the imperative mood, followed by a <code>Co-Authored-By</code> trailer:</p>
+<pre><code>Add Kanban board with ticket management and project AI settings
+
+Co-Authored-By: Claude Opus 4.7 &lt;noreply@anthropic.com&gt;</code></pre>
+
+<footer>
+  <p><a href="/wiki/">Home</a> &middot; <a href="/wiki/testing.html">Testing</a></p>
+</footer>
+</main>
+</body>
+</html>

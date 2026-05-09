@@ -1,0 +1,259 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Execution & Heartbeat — SARAB Wiki</title>
+<link rel="stylesheet" href="/wiki/wiki.css">
+</head>
+<body>
+<nav>
+  <div class="wiki-logo"><a href="/wiki/">SARAB Wiki</a></div>
+  <div class="nav-section">Overview</div>
+  <a href="/wiki/">Home</a>
+  <a href="/wiki/architecture.html">Architecture</a>
+  <div class="nav-section">Features</div>
+  <a href="/wiki/execution.html" class="active">Execution & Heartbeat</a>
+  <a href="/wiki/kanban.html">Kanban Board</a>
+  <a href="/wiki/chatbot.html">Project Chatbot</a>
+  <a href="/wiki/persistence.html">Persistence</a>
+  <a href="/wiki/settings.html">Settings & Providers</a>
+  <div class="nav-section">Reference</div>
+  <a href="/wiki/api-reference.html">API Reference</a>
+  <div class="nav-section">Guides</div>
+  <a href="/wiki/testing.html">Testing</a>
+  <a href="/wiki/development.html">Development</a>
+  <div class="nav-section">Links</div>
+  <a href="/" target="_blank">Open App &#8599;</a>
+  <a href="https://github.com/ettersAy/sarab" target="_blank">GitHub &#8599;</a>
+</nav>
+<main>
+
+<h1>Execution &amp; Heartbeat</h1>
+<p>SARAB's job execution system handles the full lifecycle of Claude CLI invocations: spawning the process, streaming output in real-time, detecting idle or hard timeouts, retrying on failure, and supporting stop/resume for long-running terminal sessions.</p>
+
+<div class="callout">
+<strong>Heartbeat mode is the default.</strong> When <code>timeoutMs</code> is <code>0</code> (the default), there is no hard deadline &mdash; jobs run indefinitely until completion. The idle heartbeat system provides proactive detection of stuck processes.
+</div>
+
+<h2>Execution Modes</h2>
+<p>Each job carries an <code>executionMode</code> field controlling how the prompt is dispatched:</p>
+<table>
+  <tr><th>Mode</th><th>Description</th></tr>
+  <tr><td><code>"api"</code></td><td>One-shot Claude CLI execution via <code>-p "prompt"</code>. Default mode. Supports stop/resume, heartbeat, and session capture.</td></tr>
+  <tr><td><code>"terminal"</code></td><td>Runs from the project root directory. Supports stop/resume with live log streaming and process group management.</td></tr>
+</table>
+<p>The executor is selected by the <code>AIProvider</code> type in settings:</p>
+<table>
+  <tr><th>Provider type</th><th>Executor class</th><th>Mechanism</th></tr>
+  <tr><td><code>claude-cli</code></td><td><code>ClaudeExecutor</code></td><td><code>child_process.spawn("claude", [...flags, "-p", prompt])</code></td></tr>
+  <tr><td><code>openai-compatible</code></td><td><code>DeepSeekExecutor</code></td><td>HTTP POST to OpenAI-compatible API endpoint</td></tr>
+</table>
+
+<h2>Session Modes</h2>
+<p>The <code>sessionMode</code> field controls whether a job resumes a previous Claude conversation or starts fresh:</p>
+<table>
+  <tr><th>sessionMode</th><th>sessionId</th><th>Behavior</th></tr>
+  <tr><td>(unset) / <code>"new"</code></td><td>&mdash;</td><td>Fresh invocation, no <code>--resume</code> flag. Always starts a new conversation.</td></tr>
+  <tr><td><code>"resume"</code></td><td>set</td><td>Resumes the specified session: <code>--resume &lt;sessionId&gt;</code></td></tr>
+  <tr><td><code>"resume"</code></td><td>unset</td><td>Resolves to the latest session for the job's <code>projectId</code> via <code>SessionStore.getLatestForProject()</code></td></tr>
+  <tr><td><code>"latest"</code></td><td>&mdash;</td><td>Same as above &mdash; resume latest session for the project.</td></tr>
+</table>
+<p>Sessions are captured from Claude CLI stderr using the regex <code>/Session ID: (cls_\w+)/</code> and persisted to the <code>SessionStore</code> on successful completion.</p>
+
+<pre><code>// Session resolution logic from queue/manager.ts
+if (job.sessionMode === "resume" && job.sessionId) {
+  execInput.sessionId = job.sessionId;
+} else if (job.sessionMode === "latest" ||
+           (job.sessionMode === "resume" && !job.sessionId)) {
+  const latest = sessionStore.getLatestForProject(job.projectId ?? null);
+  if (latest) execInput.sessionId = latest.sessionId;
+}</code></pre>
+
+<h2>Heartbeat &amp; Timeout Model</h2>
+<p>SARAB uses a dual-timeout system managed inside <code>ClaudeExecutor.execute()</code>:</p>
+
+<h3>Hard timeout (<code>timeoutMs</code>)</h3>
+<p>When set to a value &gt; 0, a <code>setTimeout</code> fires after that many milliseconds and sends <code>SIGTERM</code> to the process group. Default is <code>0</code> (no hard deadline).</p>
+
+<pre><code>if (input.timeoutMs > 0) {
+  hardTimer = setTimeout(() => {
+    timedOut = true;
+    killProcessGroup(proc);
+  }, input.timeoutMs);
+}</code></pre>
+
+<h3>Idle timeout (<code>idleTimeoutMs</code>)</h3>
+<p>A separate timer resets on every stdout chunk. If no output arrives within <code>idleTimeoutMs</code>, the process is killed. This detects hung or silently failing processes without imposing an arbitrary wall-clock limit.</p>
+
+<pre><code>const resetIdleTimer = () => {
+  if (idleTimer) clearTimeout(idleTimer);
+  if (input.idleTimeoutMs > 0) {
+    idleTimer = setTimeout(() => {
+      idleTimedOut = true;
+      killProcessGroup(proc);
+    }, input.idleTimeoutMs);
+  }
+};
+// Reset on every stdout chunk
+proc.stdout?.on("data", (chunk) => {
+  onOutput(chunk);
+  onHeartbeat();
+  resetIdleTimer(); // Activity = reset idle clock
+});</code></pre>
+
+<h3>Exit code convention</h3>
+<table>
+  <tr><th>Exit code</th><th>Constant</th><th>Meaning</th></tr>
+  <tr><td>0</td><td>&mdash;</td><td>Success &mdash; normal completion</td></tr>
+  <tr><td>124</td><td><code>timedOut</code></td><td>Hard timeout fired (<code>timeoutMs</code> exceeded)</td></tr>
+  <tr><td>125</td><td><code>idleTimedOut</code></td><td>Idle timeout fired (no output for <code>idleTimeoutMs</code>)</td></tr>
+  <tr><td>143</td><td><code>killed</code></td><td>Process was killed externally (SIGTERM/SIGKILL via stop)</td></tr>
+  <tr><td>1&ndash;127, &ge;126</td><td>&mdash;</td><td>Claude CLI error or non-zero exit from the underlying command</td></tr>
+</table>
+
+<pre><code>// Process termination logic in ClaudeExecutor
+resolve({
+  exitCode: timedOut ? 124
+          : idleTimedOut ? 125
+          : this.killed   ? 143
+          : exitCode,
+  timedOut,
+  idleTimedOut,
+  capturedSessionId,
+});</code></pre>
+
+<h2>Stop / Resume Flow</h2>
+<p>The stop signal flow uses process group signaling for reliable child-process termination:</p>
+
+<pre><code>// From src/executor/claude.ts
+function killProcessGroup(proc: ChildProcess): void {
+  if (!proc.pid) return;
+  try {
+    process.kill(-proc.pid, "SIGTERM");  // Signal the whole group
+  } catch {
+    proc.kill("SIGTERM");                 // Fallback to single process
+  }
+  setTimeout(() => {
+    try {
+      process.kill(-proc.pid!, "SIGKILL"); // Hard kill after 10s grace
+    } catch {
+      proc.kill("SIGKILL");
+    }
+  }, 10_000);
+}</code></pre>
+
+<table>
+  <tr><th>Endpoint</th><th>Action</th><th>Job status transition</th></tr>
+  <tr><td><code>POST /api/jobs/:id/stop</code></td><td>Calls <code>executor.kill()</code> which invokes <code>killProcessGroup()</code> &mdash; SIGTERM then SIGKILL after 10s</td><td><code>running</code> &rarr; <code>stopped</code></td></tr>
+  <tr><td><code>POST /api/jobs/:id/resume</code></td><td>Creates a fresh pending job preserving the original <code>attempt</code> count and linking via <code>resumedFrom</code></td><td><code>stopped</code> &rarr; <code>pending</code></td></tr>
+</table>
+
+<pre><code>// QueueManager.stopJob — from src/queue/manager.ts
+stopJob(jobId: string): Job {
+  const job = this.jobStore.get(jobId);
+  if (job.status !== "running" && job.status !== "retrying")
+    throw new ValidationError("...");
+  if (this.executor.kill) this.executor.kill();
+  const updated = this.jobStore.update(jobId, {
+    status: "stopped",
+    completedAt: new Date().toISOString(),
+    stoppedAt: new Date().toISOString(),
+    error: "Stopped by user",
+  });
+  this.emit("job-cancelled", { type: "job-cancelled", job: updated });
+  return updated;
+}</code></pre>
+
+<h2>SSE Events</h2>
+<p>The <code>SSEManager</code> subscribes to <code>QueueManager</code> events and broadcasts them to all connected browser clients:</p>
+<table>
+  <tr><th>Event</th><th>Payload</th><th>When</th></tr>
+  <tr><td><code>job-started</code></td><td>Full <code>Job</code> object</td><td>Job transitions from <code>pending</code> to <code>running</code></td></tr>
+  <tr><td><code>job-completed</code></td><td>Full <code>Job</code> object (exitCode=0)</td><td>Process exits cleanly</td></tr>
+  <tr><td><code>job-failed</code></td><td>Full <code>Job</code> object</td><td>Process exits non-zero or executor throws</td></tr>
+  <tr><td><code>job-cancelled</code></td><td>Full <code>Job</code> object</td><td>User cancels (pending) or stops (running)</td></tr>
+  <tr><td><code>job-heartbeat</code></td><td><code>{ jobId, at }</code></td><td>Every stdout chunk from the running process</td></tr>
+  <tr><td><code>job-retrying</code></td><td>Full <code>Job</code> object</td><td>Retry attempt begins after exponential backoff</td></tr>
+  <tr><td><code>stats</code></td><td><code>QueueStats</code> object</td><td>Every queue poll tick</td></tr>
+</table>
+<p>The heartbeat event is <strong>not rate-limited</strong> &mdash; it fires on every stdout write, providing real-time activity indicators in the queue UI.</p>
+
+<pre><code>// SSEManager subscribes to QueueManager events
+queueManager.on("job-started",   (e) => broadcast("job-started",   e.job));
+queueManager.on("job-completed", (e) => broadcast("job-completed", e.job));
+queueManager.on("job-failed",    (e) => broadcast("job-failed",    e.job));
+queueManager.on("job-cancelled", (e) => broadcast("job-cancelled", e.job));
+queueManager.on("job-retrying",  (e) => broadcast("job-retrying",  e.job));
+queueManager.on("job-heartbeat", (e) => broadcast("job-heartbeat", e));
+queueManager.on("queue-tick",    ()  => broadcast("stats", jobStore.stats()));</code></pre>
+
+<h2>Concurrency &amp; Queue Polling</h2>
+<p>The queue runs a fixed-interval poll loop (<code>pollIntervalMs</code>, default 5000ms). Each tick:</p>
+<ol>
+  <li>Computes available capacity: <code>concurrency - activeJobs.size</code></li>
+  <li>Fetches up to that many pending jobs via <code>JobStore.getNextPending()</code></li>
+  <li>Markets each as <code>running</code> and emits <code>job-started</code></li>
+  <li>Schedules the next tick immediately (does not wait for jobs to finish)</li>
+</ol>
+
+<pre><code>// From src/queue/manager.ts — tick()
+const capacity = this.concurrency - this.activeJobs.size;
+for (let i = 0; i < capacity; i++) {
+  const job = this.jobStore.getNextPending();
+  if (!job) break;
+  this.activeJobs.add(job.id);
+  started.push(this.processJob(job));
+}
+this.scheduleNext(); // Next tick independent of job completion</code></pre>
+
+<p><strong>Note:</strong> Default concurrency is <code>1</code>. Jobs are processed sequentially. Concurrency &gt; 1 is supported but JSONL storage requires careful handling of concurrent writes (uuid-based tmp filenames prevent conflicts).</p>
+
+<h2>Retry with Exponential Backoff</h2>
+<p>When a job fails (non-zero exit code), <code>processJob</code> retries up to <code>maxRetries</code> times with exponential backoff capped at 60 seconds:</p>
+
+<pre><code>for (let attempt = 0; attempt < maxAttempts; attempt++) {
+  if (attempt > 0) {
+    const delay = Math.min(2000 * Math.pow(2, attempt - 1), 60_000);
+    await sleep(delay);
+  }
+  // ... execute attempt ...
+}</code></pre>
+
+<p>The backoff progression: 2s, 4s, 8s, 16s, 32s, 60s (cap), 60s, ...</p>
+
+<h2>Error Recovery &amp; Stale Jobs</h2>
+<p>On startup, <code>QueueManager.recoverStaleJobs()</code> scans the store for any jobs stuck in <code>running</code> or <code>retrying</code> status (left over from a crash) and marks them as <code>failed</code> with a descriptive message:</p>
+
+<pre><code>private recoverStaleJobs(): void {
+  const stale = this.jobStore.list()
+    .filter((j) => j.status === "running" || j.status === "retrying");
+  for (const job of stale) {
+    this.jobStore.update(job.id, {
+      status: "failed",
+      error: "Server restarted — job was in progress",
+      completedAt: new Date().toISOString(),
+    });
+  }
+}</code></pre>
+
+<p>The executor <code>execute()</code> call is wrapped in <code>try/catch</code> within <code>processJob</code>. If the executor throws an unexpected error (not a normal non-zero exit), the job is immediately marked <code>failed</code> with <code>exitCode: -1</code> and the error message is captured.</p>
+
+<h2>Job Lifecycle Diagram</h2>
+<pre><code>pending ──→ running ──→ completed (exitCode=0)
+  │            │
+  │            ├──→ failed (non-zero exit / executor error)
+  │            ├──→ stopped (user stop request)
+  │            └──→ retrying ──→ running (backoff delay)
+  │
+  └──── cancelled (user cancels while pending)
+
+stopped ──→ pending (resume)
+failed  ──→ pending (retry, resets attempt to 0)</code></pre>
+
+<footer>
+  <p><a href="/wiki/">Home</a> &middot; <a href="/wiki/development.html">Development Guide</a></p>
+</footer>
+</main>
+</body>
+</html>

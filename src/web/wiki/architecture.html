@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Architecture — SARAB Wiki</title>
+<link rel="stylesheet" href="/wiki/wiki.css">
+</head>
+<body>
+<nav>
+  <div class="wiki-logo"><a href="/wiki/">SARAB Wiki</a></div>
+  <div class="nav-section">Overview</div>
+  <a href="/wiki/">Home</a>
+  <a href="/wiki/architecture.html" class="active">Architecture</a>
+  <div class="nav-section">Features</div>
+  <a href="/wiki/execution.html">Execution & Heartbeat</a>
+  <a href="/wiki/kanban.html">Kanban Board</a>
+  <a href="/wiki/chatbot.html">Project Chatbot</a>
+  <a href="/wiki/persistence.html">Persistence</a>
+  <a href="/wiki/settings.html">Settings & Providers</a>
+  <div class="nav-section">Reference</div>
+  <a href="/wiki/api-reference.html">API Reference</a>
+  <div class="nav-section">Guides</div>
+  <a href="/wiki/testing.html">Testing</a>
+  <a href="/wiki/development.html">Development</a>
+  <div class="nav-section">Links</div>
+  <a href="/" target="_blank">Open App &#8599;</a>
+  <a href="https://github.com/ettersAy/sarab" target="_blank">GitHub &#8599;</a>
+</nav>
+<main>
+
+<h1>Architecture</h1>
+
+<h2>System Diagram</h2>
+<pre><code>Browser (SSE) ──→ Express Server (port 3457)
+                    │
+                    ├── /api/jobs/*      → JobStore (JSONL + markdown)
+                    ├── /api/projects/*  → ProjectStore (filesystem dirs)
+                    ├── /api/tickets/*   → TicketStore (JSONL + markdown)
+                    ├── /api/chatbot/*   → ChatStore (JSONL)
+                    ├── /api/settings/*  → SettingsStore (JSON)
+                    ├── /api/sessions/*  → SessionStore (JSONL)
+                    ├── /api/prompt/*    → Executor (AI call)
+                    ├── /api/events      → SSEManager (real-time)
+                    └── /wiki/*          → Static HTML docs
+
+QueueManager (poll loop, concurrency control)
+  └── ClaudeExecutor (spawn claude CLI)
+  └── DeepSeekExecutor (HTTP to OpenAI-compatible APIs)</code></pre>
+
+<h2>Backend Modules</h2>
+<table>
+  <tr><th>Module</th><th>File</th><th>Purpose</th></tr>
+  <tr><td>Entry</td><td><code>src/server.ts</code></td><td>Express setup, DI wiring, startup/shutdown</td></tr>
+  <tr><td>Config</td><td><code>src/config.ts</code></td><td>All env-based config, single source of truth</td></tr>
+  <tr><td>Queue</td><td><code>src/queue/manager.ts</code></td><td>Poll loop, concurrency, retry/backoff, heartbeat events</td></tr>
+  <tr><td>SSE</td><td><code>src/queue/sse.ts</code></td><td>Server-Sent Events: job lifecycle, heartbeat, stats</td></tr>
+  <tr><td>Claude Executor</td><td><code>src/executor/claude.ts</code></td><td>Spawns claude CLI, heartbeat idle detection, process group signals</td></tr>
+  <tr><td>DeepSeek Executor</td><td><code>src/executor/deepseek.ts</code></td><td>HTTP executor for OpenAI-compatible APIs</td></tr>
+  <tr><td>Executor Factory</td><td><code>src/executor/factory.ts</code></td><td>Creates executor from AIProvider config</td></tr>
+  <tr><td>Chatbot Context</td><td><code>src/chatbot/context.ts</code></td><td>Loads project docs, builds AI prompts with history</td></tr>
+</table>
+
+<h2>Storage Layer</h2>
+<table>
+  <tr><th>Store</th><th>File</th><th>Backend</th></tr>
+  <tr><td>JobStore</td><td><code>src/storage/jobs.ts</code></td><td>JSONL cache + markdown files for prompts</td></tr>
+  <tr><td>ProjectStore</td><td><code>src/storage/projects.ts</code></td><td>Filesystem directories + project.json (atomic writes)</td></tr>
+  <tr><td>TicketStore</td><td><code>src/storage/tickets.ts</code></td><td>JSONL cache + markdown files for tickets</td></tr>
+  <tr><td>ChatStore</td><td><code>src/storage/chatbot.ts</code></td><td>JSONL for conversations + messages</td></tr>
+  <tr><td>SessionStore</td><td><code>src/storage/sessions.ts</code></td><td>JSONL for Claude session tracking</td></tr>
+  <tr><td>SettingsStore</td><td><code>src/storage/settings.ts</code></td><td>JSON with deep-merge and fallback</td></tr>
+  <tr><td>LogStore</td><td><code>src/storage/logs.ts</code></td><td>Per-job .log files</td></tr>
+  <tr><td>fs-utils</td><td><code>src/storage/fs-utils.ts</code></td><td>Slugify, safe filenames, dir scanning, atomic writes</td></tr>
+  <tr><td>md-serializer</td><td><code>src/storage/md-serializer.ts</code></td><td>Markdown serialize/deserialize tickets + prompts</td></tr>
+</table>
+
+<h2>Frontend Modules (vanilla JS, no framework)</h2>
+<table>
+  <tr><th>Module</th><th>File</th><th>Purpose</th></tr>
+  <tr><td>Core</td><td><code>js/core.js</code></td><td>State, routing, SSE, API helpers, error boundary, init</td></tr>
+  <tr><td>Actions</td><td><code>js/actions.js</code></td><td>Job actions: cancel, retry, stop, resume, edit, view, delete</td></tr>
+  <tr><td>Modals</td><td><code>js/modals.js</code></td><td>Modal close handlers, escape key, overlay clicks</td></tr>
+  <tr><td>Dashboard</td><td><code>js/views/dashboard.js</code></td><td>Stats cards, recent jobs, Kanban overview</td></tr>
+  <tr><td>Queue</td><td><code>js/views/queue.js</code></td><td>Job list, filters, search, pagination, heartbeat indicators</td></tr>
+  <tr><td>Submit</td><td><code>js/views/submit.js</code></td><td>New prompt, prompt improvement with undo, session selection</td></tr>
+  <tr><td>Projects</td><td><code>js/views/projects.js</code></td><td>Project CRUD, detail view with sessions</td></tr>
+  <tr><td>Kanban</td><td><code>js/views/kanban.js</code></td><td>Board with subtickets, drag-and-drop, ticket CRUD</td></tr>
+  <tr><td>Chatbot</td><td><code>js/views/chatbot.js</code></td><td>Multi-turn Q&A with quick actions</td></tr>
+  <tr><td>Settings</td><td><code>js/views/settings.js</code></td><td>Provider management, execution + idle timeout defaults</td></tr>
+</table>
+
+<h2>Data Flow: Job Execution</h2>
+<pre><code>1. User submits prompt via /api/jobs POST
+2. JobStore persists to JSONL + markdown (if project-linked)
+3. SSE broadcasts "job created" to all clients
+4. QueueManager tick picks up pending job
+5. ProjectStore resolves cwd, SessionStore resolves session
+6. ClaudeExecutor spawns `claude -p "prompt"` with heartbeat
+7. stdout chunks → LogStore.write() + SSE heartbeat events
+8. On completion → JobStore.update() + SessionStore.create() + SSE broadcast</code></pre>
+
+<h2>Error Handling Architecture</h2>
+<pre><code>AppError (base)
+  ├── NotFoundError (404) — Resource not found
+  └── ValidationError (400) — Invalid input
+
+Express error middleware catches AppError instances.
+Uncaught executor throws → try/catch in processJob → job-failed event.
+Frontend unhandledrejection → toast notification + console.error.</code></pre>
+
+<footer>
+  <p><a href="/wiki/">Home</a> &middot; <a href="/wiki/development.html">Development Guide</a></p>
+</footer>
+</main>
+</body>
+</html>

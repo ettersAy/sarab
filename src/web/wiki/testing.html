@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Testing — SARAB Wiki</title>
+<link rel="stylesheet" href="/wiki/wiki.css">
+</head>
+<body>
+<nav>
+  <div class="wiki-logo"><a href="/wiki/">SARAB Wiki</a></div>
+  <div class="nav-section">Overview</div>
+  <a href="/wiki/">Home</a>
+  <a href="/wiki/architecture.html">Architecture</a>
+  <div class="nav-section">Features</div>
+  <a href="/wiki/execution.html">Execution & Heartbeat</a>
+  <a href="/wiki/kanban.html">Kanban Board</a>
+  <a href="/wiki/chatbot.html">Project Chatbot</a>
+  <a href="/wiki/persistence.html">Persistence</a>
+  <a href="/wiki/settings.html">Settings & Providers</a>
+  <div class="nav-section">Reference</div>
+  <a href="/wiki/api-reference.html">API Reference</a>
+  <div class="nav-section">Guides</div>
+  <a href="/wiki/testing.html" class="active">Testing</a>
+  <a href="/wiki/development.html">Development</a>
+  <div class="nav-section">Links</div>
+  <a href="/" target="_blank">Open App &#8599;</a>
+  <a href="https://github.com/ettersAy/sarab" target="_blank">GitHub &#8599;</a>
+</nav>
+<main>
+
+<h1>Testing <span class="sub">24 unit + 100 Playwright + 16 smoke = 124 total</span></h1>
+
+<h2>Test Suite Overview</h2>
+<table>
+  <tr><th>Type</th><th>Runner</th><th>Count</th><th>Duration</th></tr>
+  <tr><td>Unit tests</td><td>Node test runner (<code>node --test</code>)</td><td>24</td><td>~2s</td></tr>
+  <tr><td>API tests</td><td>Playwright (<code>tests/api.spec.ts</code>)</td><td>~80</td><td>~5s</td></tr>
+  <tr><td>UI tests</td><td>Playwright (<code>tests/ui.spec.ts</code>)</td><td>~20</td><td>~19s</td></tr>
+  <tr><td>Smoke tests</td><td>Bash + curl (<code>scripts/smoke-test.sh</code>)</td><td>16</td><td>~10s</td></tr>
+  <tr><td><strong>Total</strong></td><td></td><td><strong>~124</strong></td><td><strong>~36s</strong></td></tr>
+</table>
+
+<h2>Unit Tests</h2>
+<p>Unit tests live in <code>tests/unit/</code> and run via <code>node --import tsx --test</code>. They test isolated modules with no server dependency.</p>
+
+<table>
+  <tr><th>File</th><th>Tests</th><th>What is tested</th></tr>
+  <tr>
+    <td><code>tests/unit/errors.test.ts</code></td><td>5</td>
+    <td><code>AppError</code> hierarchy — <code>NotFoundError</code>, <code>ValidationError</code>, status codes, message formatting, <code>instanceof</code> checks</td>
+  </tr>
+  <tr>
+    <td><code>tests/unit/fs-utils.test.ts</code></td><td>12</td>
+    <td><code>slugify()</code>, <code>safeFilename()</code>, directory scanning, atomic write utilities, edge cases (special chars, empty strings, long names)</td>
+  </tr>
+  <tr>
+    <td><code>tests/unit/md-serializer.test.ts</code></td><td>7</td>
+    <td><code>serialize()</code> and <code>deserialize()</code> for markdown files — frontmatter parsing, ticket round-trip, prompt persistence format</td>
+  </tr>
+</table>
+
+<p>Run with:</p>
+<pre><code>npm run test:unit
+# or directly:
+node --import tsx --test tests/unit/*.test.ts</code></pre>
+
+<h2>Playwright API Tests</h2>
+<p>The <code>tests/api.spec.ts</code> file contains approximately 80 tests covering every API endpoint. Tests use Playwright's <code>request</code> fixture (no browser).</p>
+
+<table>
+  <tr><th>Group</th><th>Tests</th><th>Coverage</th></tr>
+  <tr><td>Health & Static</td><td>4</td><td><code>/health</code>, <code>/</code>, <code>/styles.css</code>, <code>/js/core.js</code></td></tr>
+  <tr><td>Job CRUD</td><td>10</td><td>Create, get, 404, validation, cancel, retry, log, delete, post-delete 404</td></tr>
+  <tr><td>Job Listing & Stats</td><td>3</td><td>List array, stats counters, multi-status stats</td></tr>
+  <tr><td>Queue Management</td><td>3</td><td>Status, pause, resume</td></tr>
+  <tr><td>Prompt Improvement</td><td>8</td><td>Missing prompt, invalid action, missing action, 5 valid actions</td></tr>
+  <tr><td>Projects</td><td>10</td><td>List, create, get, rootPath validation, duplicate names, update, delete, linked jobs</td></tr>
+  <tr><td>Prompt Management</td><td>4</td><td>PATCH title, duplicate, detail, create with projectId</td></tr>
+  <tr><td>Sessions</td><td>3</td><td>Empty list, latest 404, get by ID 404</td></tr>
+  <tr><td>Settings</td><td>8</td><td>GET defaults, PUT save, list providers, create validation, create provider, delete default, set default</td></tr>
+  <tr><td>Execution Modes</td><td>3</td><td>Create with executionMode, stop non-running, resume non-stopped</td></tr>
+  <tr><td>Heartbeat / Timeout</td><td>3</td><td>Idle timeout job, setting defaults, pause/resume preserve state</td></tr>
+  <tr><td>Tickets (Kanban)</td><td>9</td><td>List, create, validation (title, column), get, patch, project link, move, delete</td></tr>
+  <tr><td>Filesystem Persistence</td><td>10</td><td>Project dir creation, duplicate error, filesystem listing, deletion cleanup, ticket/project persistence, prompt/project persistence, invalid name, empty name, rename</td></tr>
+</table>
+
+<h2>Playwright UI Tests</h2>
+<p>The <code>tests/ui.spec.ts</code> file contains approximately 20 tests that exercise the browser-based frontend via Playwright.</p>
+
+<table>
+  <tr><th>Group</th><th>Tests</th><th>Coverage</th></tr>
+  <tr><td>Navigation</td><td>4</td><td>Default view, queue nav, submit nav, active button highlighting</td></tr>
+  <tr><td>Dashboard</td><td>2</td><td>Stats cards (7 types), refresh button</td></tr>
+  <tr><td>Submit Form</td><td>3</td><td>All fields present, create job flow, required title validation</td></tr>
+  <tr><td>Queue</td><td>3</td><td>Filter buttons, pause button, filter active state</td></tr>
+  <tr><td>Log Modal</td><td>1</td><td>Hidden initially</td></tr>
+  <tr><td>SSE / Topbar</td><td>1</td><td>Worker indicator and label</td></tr>
+  <tr><td>Queue Renders</td><td>1</td><td>Table or empty state</td></tr>
+  <tr><td>Projects</td><td>3</td><td>View renders, create form fields, create and verify in list</td></tr>
+  <tr><td>Kanban</td><td>3</td><td>Column headers, form opens, create and verify in backlog</td></tr>
+  <tr><td>Prompt Submission</td><td>1</td><td>Submit prompt navigates to queue with toast</td></tr>
+  <tr><td>Chatbot</td><td>4</td><td>View loads, project selector, quick action buttons, empty state</td></tr>
+</table>
+
+<p>Run Playwright tests with:</p>
+<pre><code># All Playwright tests (API + UI)
+npx playwright test
+
+# Specific file
+npx playwright test tests/api.spec.ts
+npx playwright test tests/ui.spec.ts
+
+# With UI mode (interactive)
+npx playwright test --ui</code></pre>
+
+<p>The Playwright config in <code>playwright.config.ts</code> auto-starts the dev server on port 3469 via <code>webServer</code>. Two workers can conflict on JSONL writes, so tests use 1 worker (<code>workers: 1</code>). Each <code>describe</code> block cleans up its own data (cancel + delete jobs, delete projects).</p>
+
+<h2>Smoke Tests</h2>
+<p>The <code>scripts/smoke-test.sh</code> script starts a fresh dev server on a specified port, runs 16 curl-based API checks, then shuts it down. It covers health, static files, job CRUD, queue pause/resume, cancel, delete, and SSE connectivity.</p>
+
+<p>Each smoke test run uses a separate port to avoid conflicting with a running dev server:</p>
+<pre><code>./scripts/smoke-test.sh           # Port 3457
+./scripts/smoke-test.sh 3467      # Custom port</code></pre>
+
+<h2>Running Everything</h2>
+<pre><code># Full test suite (JS syntax check + TypeScript + smoke + Playwright)
+./scripts/run-all-tests.sh
+
+# Individual components
+npm run test:unit                   # 24 unit tests
+npm run check                       # tsc --noEmit
+npx playwright test                 # 100 Playwright tests (API + UI)
+./scripts/smoke-test.sh 3467        # 16 curl checks on port 3467</code></pre>
+
+<h2>Test Conventions</h2>
+<ul>
+  <li><strong>Clean data before run:</strong> Each test block creates its own fixtures and cleans up via <code>afterEach</code> / <code>afterAll</code>. Tests should never depend on state left by another test.</li>
+  <li><strong>1 Playwright worker:</strong> JSONL writes use atomic temp files (uuid-tmp naming), but parallel workers can still conflict. The config sets <code>workers: 1</code>.</li>
+  <li><strong>Separate port per smoke test:</strong> Smoke tests start their own server. Pass <code>PORT</code> via env or first argument to avoid clashing with a running instance.</li>
+  <li><strong>Queue paused during Job CRUD tests:</strong> Job CRUD tests pause the queue via <code>POST /api/queue/pause</code> so created jobs stay <code>pending</code> and can be cancelled/deleted without racing the poll loop.</li>
+  <li><strong>SSE curl timeout:</strong> Always use <code>--max-time 2</code> when curling SSE endpoints — they never close on their own.</li>
+</ul>
+
+<h2>JS Syntax Check</h2>
+<p>The <code>run-all-tests.sh</code> script runs <code>node -c</code> on every file under <code>src/web/js/</code> before executing any tests. This catches accidental TypeScript syntax (e.g., <code>: any</code> annotations) in vanilla JS files. Run it manually:</p>
+<pre><code>for f in src/web/js/*.js src/web/js/views/*.js; do
+  node -c "$f"
+done</code></pre>
+
+<div class="callout warn">The frontend is plain vanilla JS — no TypeScript, no bundler, no framework. Never use TypeScript annotations (<code>: any</code>, <code>: string</code>, etc.) in <code>src/web/</code> files. The <code>node -c</code> check will reject them.</div>
+
+<footer>
+  <p><a href="/wiki/">Home</a> &middot; <a href="/wiki/development.html">Development Guide</a></p>
+</footer>
+</main>
+</body>
+</html>

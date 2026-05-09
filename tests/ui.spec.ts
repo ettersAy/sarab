@@ -257,3 +257,23 @@ test("Chatbot shows empty state initially", async ({ page }) => {
   await page.click('button[data-view="chatbot"]');
   await expect(page.locator(".empty-state")).toBeVisible();
 });
+
+// ── Wiki ─────────────────────────────────────────────────────────
+test("Wiki home page loads", async ({ page }) => {
+  await page.goto("/wiki/");
+  await expect(page.locator("h1")).toContainText("SARAB");
+  await expect(page.locator(".feature-grid")).toBeVisible();
+});
+
+test("Wiki architecture page loads with nav", async ({ page }) => {
+  await page.goto("/wiki/architecture.html");
+  await expect(page.locator("h1")).toContainText("Architecture");
+  await expect(page.locator("nav")).toBeVisible();
+});
+
+test("Wiki nav links to all pages", async ({ page }) => {
+  await page.goto("/wiki/");
+  const links = page.locator("nav a[href^='/wiki/']");
+  await expect(links.first()).toBeVisible();
+  expect(await links.count()).toBeGreaterThanOrEqual(8);
+});

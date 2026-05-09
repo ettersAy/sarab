@@ -1,0 +1,172 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Persistence — SARAB Wiki</title>
+<link rel="stylesheet" href="/wiki/wiki.css">
+</head>
+<body>
+<nav>
+  <div class="wiki-logo"><a href="/wiki/">SARAB Wiki</a></div>
+  <div class="nav-section">Overview</div>
+  <a href="/wiki/">Home</a>
+  <a href="/wiki/architecture.html">Architecture</a>
+  <div class="nav-section">Features</div>
+  <a href="/wiki/execution.html">Execution & Heartbeat</a>
+  <a href="/wiki/kanban.html">Kanban Board</a>
+  <a href="/wiki/chatbot.html">Project Chatbot</a>
+  <a href="/wiki/persistence.html" class="active">Persistence</a>
+  <a href="/wiki/settings.html">Settings & Providers</a>
+  <div class="nav-section">Reference</div>
+  <a href="/wiki/api-reference.html">API Reference</a>
+  <div class="nav-section">Guides</div>
+  <a href="/wiki/testing.html">Testing</a>
+  <a href="/wiki/development.html">Development</a>
+  <div class="nav-section">Links</div>
+  <a href="/" target="_blank">Open App &#8599;</a>
+  <a href="https://github.com/ettersAy/sarab" target="_blank">GitHub &#8599;</a>
+</nav>
+<main>
+
+<h1>Filesystem Persistence</h1>
+
+<p>SARAB stores all data on disk under <code>/srv/dev/sarab/projects/</code>. Each project is a directory, with tickets and prompts as editable markdown files. A JSONL cache layer provides fast startup and in-memory querying. No database required.</p>
+
+<h2>Directory Layout</h2>
+<pre><code>/srv/dev/sarab/projects/
+  my-project/                   # Slugified project name
+    project.json                # Project metadata (id, name, rootPath, settings)
+    tickets/
+      backlog/                  # One .md file per ticket
+        implement-auth-abc123.md
+        fix-nav-xyz789.md
+    prompts/                    # One .md file per job prompt
+        setup-db-def456.md
+        deploy-ghi012.md
+  another-project/
+    project.json
+    tickets/backlog/
+    prompts/</code></pre>
+
+<h3>project.json</h3>
+<p>Each project directory contains a <code>project.json</code> with metadata:</p>
+<pre><code>{
+  "id": "a1b2c3d4",
+  "name": "My Project",
+  "rootPath": "/home/user/my-project",
+  "createdAt": "2026-05-09T12:00:00.000Z",
+  "updatedAt": "2026-05-09T14:30:00.000Z",
+  "settings": {
+    "defaultModel": "claude-sonnet-4-6",
+    "defaultExecutionMode": "api",
+    "defaultSessionMode": "resume"
+  }
+}</code></pre>
+
+<h2>Ticket Markdown Format</h2>
+<p>Each ticket in <code>tickets/backlog/</code> is a flat text file with a header block and body, separated by <code>========</code>. The <strong>parentId</strong> field enables subticket hierarchies.</p>
+<pre><code>Title: Implement authentication
+Kanban Status: in-progress
+Priority: high
+Project: a1b2c3d4
+Parent: e5f6g7h8
+Job: i9j0k1l2
+Session:
+Tags: auth, security
+Created: 2026-04-10T09:00:00.000Z
+Updated: 2026-05-01T11:30:00.000Z
+Started: 2026-04-11T08:00:00.000Z
+Paused:
+Done:
+Ticket ID: abc12345
+========================================
+Content:
+Implement OAuth-based authentication with JWT tokens.
+- Login page
+- Token refresh
+- Session management</code></pre>
+
+<h2>Prompt Markdown Format</h2>
+<p>Each job linked to a project also saves a markdown file in <code>prompts/</code>:</p>
+<pre><code>Title: Setup database schema
+Model: claude-sonnet-4-6
+Project: a1b2c3d4
+Session: cls_abc123
+Session Mode: resume
+Execution Mode: api
+Tags: db, schema
+Status: completed
+Attempt: 1 / 2
+Created: 2026-05-01T10:00:00.000Z
+Started: 2026-05-01T10:00:05.000Z
+Completed: 2026-05-01T10:02:30.000Z
+Error: none
+Exit Code: 0
+Job ID: def45678
+========================================
+Content:
+Create a PostgreSQL schema with users, projects, and tasks tables.</code></pre>
+
+<h2>Atomic Writes</h2>
+<p>All file writes follow an atomic pattern to prevent corruption:</p>
+<ol>
+  <li>Write to a temporary file (<code>target.&lt;uuid&gt;.tmp</code>)</li>
+  <li>Call <code>renameSync(tmp, target)</code> (atomic on POSIX)</li>
+</ol>
+<p>This is used by <code>writeProjectMeta</code> (fs-utils.ts), <code>persistAll</code> on both JobStore and TicketStore, and all markdown writes. Appends (<code>persistOne</code>) skip the tmp file for performance but only add new data.</p>
+
+<h2>Key Modules</h2>
+<table>
+  <tr><th>Module</th><th>File</th><th>Responsibility</th></tr>
+  <tr><td>fs-utils</td><td><code>src/storage/fs-utils.ts</code></td><td>Slugify, safe filenames, project directory scanning, atomic meta writes, recursive delete, path resolution</td></tr>
+  <tr><td>md-serializer</td><td><code>src/storage/md-serializer.ts</code></td><td>Serialize/deserialize tickets and prompts to/from markdown text</td></tr>
+  <tr><td>JobStore</td><td><code>src/storage/jobs.ts</code></td><td>JSONL cache + markdown prompt files, loadFromMarkdown on startup</td></tr>
+  <tr><td>TicketStore</td><td><code>src/storage/tickets.ts</code></td><td>JSONL cache + markdown ticket files, loadFromMarkdown on startup</td></tr>
+  <tr><td>ProjectStore</td><td><code>src/storage/projects.ts</code></td><td>Project CRUD via filesystem directories</td></tr>
+</table>
+
+<h2>Error Handling</h2>
+<table>
+  <tr><th>Scenario</th><th>Behavior</th></tr>
+  <tr><td>Malformed JSONL line</td><td>Skipped silently in <code>loadCache()</code> — no crash</td></tr>
+  <tr><td>Malformed markdown file</td><td>Skipped with a <code>logger.warn</code> — single bad file doesn't block startup</td></tr>
+  <tr><td>Malformed project.json</td><td>Directory skipped in <code>scanProjectDirs()</code></td></tr>
+  <tr><td>Path traversal in project name (<code>../</code>)</td><td>Rejected by <code>validateProjectName</code> — throws <code>ValidationError</code></td></tr>
+  <tr><td>Duplicate directory slug</td><td><code>ValidationError</code> with 400 status — "Project folder already exists"</td></tr>
+  <tr><td>Missing root path</td><td><code>ValidationError</code> — "Root path does not exist or is not a directory"</td></tr>
+  <tr><td>Missing project directory on read</td><td><code>readProjectMeta</code> returns <code>null</code>, <code>metaToProject</code> returns <code>null</code>, project is excluded from listings</td></tr>
+</table>
+
+<h2>Startup Loading Sequence</h2>
+<p>Both <code>JobStore</code> and <code>TicketStore</code> follow the same startup pattern:</p>
+<pre><code>constructor()
+  1. loadCache()          — Parse JSONL file into in-memory Map
+  2. loadFromMarkdown()    — Scan projects/ directories for .md files
+                           and add any NOT already in the Map</code></pre>
+<p><code>ProjectStore.list()</code> calls <code>scanProjectDirs()</code> on every invocation, reading each <code>project.json</code> fresh from disk — no cache.</p>
+
+<h2>JSONL as Secondary Cache</h2>
+<p>JSONL files (<code>jobs.jsonl</code>, <code>tickets.jsonl</code>) serve as a fast-access cache alongside the canonical markdown files. The in-memory <code>Map</code> is the primary working state. On mutation:</p>
+<ul>
+  <li><strong>peristOne</strong> (create) — appends one JSON line to the .jsonl file</li>
+  <li><strong>peristAll</strong> (update/delete) — rewrites entire JSONL atomically via tmp + rename</li>
+  <li><strong>writeMarkdown</strong> — creates/updates the .md file for project-linked items</li>
+</ul>
+
+<h2>Migration Notes</h2>
+<p>The persistence layer replaced an earlier volatile in-memory store. Key changes:</p>
+<ul>
+  <li>Tickets move from in-memory arrays to file-backed <code>TicketStore</code></li>
+  <li>Project directories are the single source of truth for project-linked data</li>
+  <li>JSONL files auto-populate from existing markdown on first load — no migration script needed</li>
+  <li>Old test fixtures that mocked in-memory state were updated to use temporary directories via <code>mkdtempSync</code></li>
+  <li>The <code>safeFilenameWithId</code> helper ensures filenames remain unique after title changes</li>
+</ul>
+
+<footer>
+  <p><a href="/wiki/">Home</a> &middot; <a href="/wiki/settings.html">Settings & Providers</a></p>
+</footer>
+</main>
+</body>
+</html>

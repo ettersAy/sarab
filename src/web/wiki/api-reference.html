@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>API Reference — SARAB Wiki</title>
+<link rel="stylesheet" href="/wiki/wiki.css">
+</head>
+<body>
+<nav>
+  <div class="wiki-logo"><a href="/wiki/">SARAB Wiki</a></div>
+  <div class="nav-section">Overview</div>
+  <a href="/wiki/">Home</a>
+  <a href="/wiki/architecture.html">Architecture</a>
+  <div class="nav-section">Features</div>
+  <a href="/wiki/execution.html">Execution & Heartbeat</a>
+  <a href="/wiki/kanban.html">Kanban Board</a>
+  <a href="/wiki/chatbot.html">Project Chatbot</a>
+  <a href="/wiki/persistence.html">Persistence</a>
+  <a href="/wiki/settings.html">Settings & Providers</a>
+  <div class="nav-section">Reference</div>
+  <a href="/wiki/api-reference.html" class="active">API Reference</a>
+  <div class="nav-section">Guides</div>
+  <a href="/wiki/testing.html">Testing</a>
+  <a href="/wiki/development.html">Development</a>
+  <div class="nav-section">Links</div>
+  <a href="/" target="_blank">Open App &#8599;</a>
+  <a href="https://github.com/ettersAy/sarab" target="_blank">GitHub &#8599;</a>
+</nav>
+<main>
+
+<h1>API Reference <span class="sub">Base URL: <code>http://localhost:3457/api</code></span></h1>
+
+<p>All endpoints are prefixed with <code>/api</code>. Requests and responses use JSON. Error responses follow the <code>AppError</code> shape: <code>{ error: string, message: string }</code>.</p>
+
+<div class="callout">The SSE event stream at <code>GET /api/events</code> provides real-time job lifecycle, heartbeat, and stats updates over a persistent connection.</div>
+
+<h2 id="jobs">Jobs</h2>
+<table>
+  <tr><th>Method</th><th>Path</th><th>Description</th><th>Request / Response</th></tr>
+  <tr>
+    <td><span class="badge badge-get">GET</span></td>
+    <td><code>/jobs</code></td>
+    <td>List all jobs, newest first</td>
+    <td>Query: <code>?limit=N&amp;offset=N</code>. Response: <code>Job[]</code> or <code>{ jobs, total, limit, offset }</code> when paginated.</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-get">GET</span></td>
+    <td><code>/jobs/stats</code></td>
+    <td>Queue statistics</td>
+    <td>Response: <code>{ pending, running, completed, failed, cancelled, stopped, total }</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-get">GET</span></td>
+    <td><code>/jobs/:id</code></td>
+    <td>Get a single job by ID</td>
+    <td>Response: <code>Job</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-get">GET</span></td>
+    <td><code>/jobs/:id/detail</code></td>
+    <td>Get job with log content</td>
+    <td>Response: <code>{ job, logContent }</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-get">GET</span></td>
+    <td><code>/jobs/:id/log</code></td>
+    <td>Get job log only</td>
+    <td>Response: <code>{ jobId, content }</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-post">POST</span></td>
+    <td><code>/jobs</code></td>
+    <td>Create a new job</td>
+    <td>Body: <code>{ title, prompt, model?, timeoutMs?, idleTimeoutMs?, maxRetries?, tags?, projectId?, sessionId?, sessionMode?, executionMode? }</code>. Returns <code>Job</code>.</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-patch">PATCH</span></td>
+    <td><code>/jobs/:id</code></td>
+    <td>Edit a pending/completed/failed job</td>
+    <td>Partial body: <code>{ title?, prompt?, model?, tags?, timeoutMs?, idleTimeoutMs?, maxRetries? }</code>. Cannot edit running jobs.</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-post">POST</span></td>
+    <td><code>/jobs/:id/cancel</code></td>
+    <td>Cancel a pending job</td>
+    <td>Returns updated <code>Job</code> with status <code>cancelled</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-post">POST</span></td>
+    <td><code>/jobs/:id/stop</code></td>
+    <td>Stop a running job (SIGTERM)</td>
+    <td>Returns updated <code>Job</code> with status <code>stopped</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-post">POST</span></td>
+    <td><code>/jobs/:id/resume</code></td>
+    <td>Re-queue a stopped job as pending</td>
+    <td>Returns updated <code>Job</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-post">POST</span></td>
+    <td><code>/jobs/:id/retry</code></td>
+    <td>Retry a failed job</td>
+    <td>Returns updated <code>Job</code> with status <code>pending</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-post">POST</span></td>
+    <td><code>/jobs/:id/duplicate</code></td>
+    <td>Duplicate an existing job</td>
+    <td>Creates copy with <code>" (copy)"</code> appended to title. Returns <code>Job</code>.</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-delete">DELETE</span></td>
+    <td><code>/jobs/:id</code></td>
+    <td>Delete a job and its log</td>
+    <td>Cannot delete running jobs. Response: <code>{ deleted: true }</code></td>
+  </tr>
+</table>
+
+<h2 id="projects">Projects</h2>
+<table>
+  <tr><th>Method</th><th>Path</th><th>Description</th><th>Request / Response</th></tr>
+  <tr>
+    <td><span class="badge badge-get">GET</span></td>
+    <td><code>/projects</code></td>
+    <td>List all projects, newest first</td>
+    <td>Response: <code>Project[]</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-post">POST</span></td>
+    <td><code>/projects</code></td>
+    <td>Create a project</td>
+    <td>Body: <code>{ name, rootPath, settings? }</code>. Returns <code>Project</code>.</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-get">GET</span></td>
+    <td><code>/projects/:id</code></td>
+    <td>Get a single project</td>
+    <td>Response: <code>Project</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-put">PUT</span></td>
+    <td><code>/projects/:id</code></td>
+    <td>Update project settings</td>
+    <td>Body: partial <code>Project</code>. Returns updated <code>Project</code>.</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-delete">DELETE</span></td>
+    <td><code>/projects/:id</code></td>
+    <td>Delete a project</td>
+    <td>Response: <code>{ deleted: true }</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-get">GET</span></td>
+    <td><code>/projects/:id/jobs</code></td>
+    <td>List jobs for a project</td>
+    <td>Response: <code>Job[]</code> filtered by <code>projectId</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-get">GET</span></td>
+    <td><code>/projects/:id/sessions</code></td>
+    <td>List sessions for a project</td>
+    <td>Response: <code>Session[]</code> filtered by <code>projectId</code></td>
+  </tr>
+</table>
+
+<h2 id="tickets">Tickets (Kanban)</h2>
+<table>
+  <tr><th>Method</th><th>Path</th><th>Description</th><th>Request / Response</th></tr>
+  <tr>
+    <td><span class="badge badge-get">GET</span></td>
+    <td><code>/tickets</code></td>
+    <td>List tickets with optional filters</td>
+    <td>Query: <code>?projectId=X&amp;column=backlog&amp;parentId=Y</code>. Response: <code>Ticket[]</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-post">POST</span></td>
+    <td><code>/tickets</code></td>
+    <td>Create a ticket</td>
+    <td>Body: <code>{ title, description?, column?, priority?, projectId?, parentId?, tags? }</code>. Columns: <code>backlog | ready | in-progress | paused | testing | done</code>. Priority: <code>low | medium | high | critical</code>.</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-get">GET</span></td>
+    <td><code>/tickets/:id</code></td>
+    <td>Get a single ticket</td>
+    <td>Response: <code>Ticket</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-patch">PATCH</span></td>
+    <td><code>/tickets/:id</code></td>
+    <td>Update ticket fields</td>
+    <td>Partial body. Returns updated <code>Ticket</code>.</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-delete">DELETE</span></td>
+    <td><code>/tickets/:id</code></td>
+    <td>Delete a ticket</td>
+    <td>Response: <code>{ deleted: true }</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-post">POST</span></td>
+    <td><code>/tickets/:id/move</code></td>
+    <td>Move ticket to a different column</td>
+    <td>Body: <code>{ column }</code>. Returns updated <code>Ticket</code> with timestamp updates.</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-get">GET</span></td>
+    <td><code>/tickets/:id/subtickets</code></td>
+    <td>Get child tickets</td>
+    <td>Response: <code>Ticket[]</code> where <code>parentId</code> matches <code>:id</code></td>
+  </tr>
+</table>
+
+<h2 id="chatbot">Chatbot</h2>
+<table>
+  <tr><th>Method</th><th>Path</th><th>Description</th><th>Request / Response</th></tr>
+  <tr>
+    <td><span class="badge badge-get">GET</span></td>
+    <td><code>/chatbot/conversations</code></td>
+    <td>List conversations for a project</td>
+    <td>Query: <code>?projectId=X</code> (required). Response: <code>ChatConversation[]</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-get">GET</span></td>
+    <td><code>/chatbot/conversations/:id/messages</code></td>
+    <td>Get all messages in a conversation</td>
+    <td>Response: <code>ChatMessage[]</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-delete">DELETE</span></td>
+    <td><code>/chatbot/conversations/:id</code></td>
+    <td>Delete a conversation and its messages</td>
+    <td>Response: <code>{ deleted: true }</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-post">POST</span></td>
+    <td><code>/chatbot/ask</code></td>
+    <td>Ask a question to the project chatbot</td>
+    <td>Body: <code>{ projectId, question, conversationId?, model? }</code>. Loads project context files, builds prompt with conversation history, executes AI call. Returns <code>{ conversationId, message, contextUsed, totalContextSize, truncated }</code>.</td>
+  </tr>
+</table>
+
+<h2 id="settings">Settings & Providers</h2>
+<table>
+  <tr><th>Method</th><th>Path</th><th>Description</th><th>Request / Response</th></tr>
+  <tr>
+    <td><span class="badge badge-get">GET</span></td>
+    <td><code>/settings</code></td>
+    <td>Get full settings object</td>
+    <td>Response: <code>AppSettings</code> with providers, defaults, prompt improvement config</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-put">PUT</span></td>
+    <td><code>/settings</code></td>
+    <td>Replace all settings</td>
+    <td>Body: <code>AppSettings</code>. Validates <code>defaultProviderId</code> exists in providers. Returns updated settings.</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-get">GET</span></td>
+    <td><code>/settings/providers</code></td>
+    <td>List all AI providers</td>
+    <td>Response: <code>AIProvider[]</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-post">POST</span></td>
+    <td><code>/settings/providers</code></td>
+    <td>Add a new AI provider</td>
+    <td>Body: <code>{ name, type, apiKeyEnvVar, defaultModel, enabled?, isDefault?, baseUrl?, claudeCmd?, claudeFlags? }</code>. Type is <code>claude-cli</code> or <code>openai-compatible</code>.</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-put">PUT</span></td>
+    <td><code>/settings/providers/:id</code></td>
+    <td>Update an AI provider</td>
+    <td>Partial body. Setting <code>isDefault: true</code> clears default from all others.</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-delete">DELETE</span></td>
+    <td><code>/settings/providers/:id</code></td>
+    <td>Remove a provider</td>
+    <td>Cannot delete the default provider. Response: <code>{ deleted: true }</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-post">POST</span></td>
+    <td><code>/settings/providers/:id/default</code></td>
+    <td>Set a provider as default</td>
+    <td>Clears default on all other providers. Returns <code>AIProvider</code>.</td>
+  </tr>
+</table>
+
+<h2 id="sessions">Sessions</h2>
+<table>
+  <tr><th>Method</th><th>Path</th><th>Description</th><th>Request / Response</th></tr>
+  <tr>
+    <td><span class="badge badge-get">GET</span></td>
+    <td><code>/sessions</code></td>
+    <td>List sessions, optionally filtered</td>
+    <td>Query: <code>?projectId=X</code>. Response: <code>Session[]</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-get">GET</span></td>
+    <td><code>/sessions/latest</code></td>
+    <td>Get the most recent session</td>
+    <td>Query: <code>?projectId=X</code> (optional). Returns latest session scoped to project or global.</td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-get">GET</span></td>
+    <td><code>/sessions/:id</code></td>
+    <td>Get session by ID</td>
+    <td>Response: <code>Session</code></td>
+  </tr>
+</table>
+
+<h2 id="queue">Queue</h2>
+<table>
+  <tr><th>Method</th><th>Path</th><th>Description</th><th>Request / Response</th></tr>
+  <tr>
+    <td><span class="badge badge-get">GET</span></td>
+    <td><code>/queue/status</code></td>
+    <td>Get queue running state</td>
+    <td>Response: <code>{ running: boolean }</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-post">POST</span></td>
+    <td><code>/queue/pause</code></td>
+    <td>Pause the queue</td>
+    <td>Stops the poll loop. Response: <code>{ running: false }</code></td>
+  </tr>
+  <tr>
+    <td><span class="badge badge-post">POST</span></td>
+    <td><code>/queue/resume</code></td>
+    <td>Resume the queue</td>
+    <td>Restarts the poll loop. Response: <code>{ running: true }</code></td>
+  </tr>
+</table>
+
+<h2 id="prompt">Prompt Improvement</h2>
+<table>
+  <tr><th>Method</th><th>Path</th><th>Description</th><th>Request / Response</th></tr>
+  <tr>
+    <td><span class="badge badge-post">POST</span></td>
+    <td><code>/prompt/improve</code></td>
+    <td>Improve a prompt using AI</td>
+    <td>Body: <code>{ prompt, action }</code>. Action: <code>reformulate | improve | correct | shorten | expand</code>. Response: <code>{ result, action, original }</code>.</td>
+  </tr>
+</table>
+
+<h2 id="sse">SSE Events</h2>
+<p>Connect to <code>GET /api/events</code> to receive real-time server-sent events. Each event is a JSON line prefixed with <code>data: </code>:</p>
+<table>
+  <tr><th>Event</th><th>Payload</th><th>Description</th></tr>
+  <tr><td><code>job-started</code></td><td><code>Job</code></td><td>A job began execution</td></tr>
+  <tr><td><code>job-completed</code></td><td><code>Job</code></td><td>A job finished successfully</td></tr>
+  <tr><td><code>job-failed</code></td><td><code>Job</code></td><td>A job exited with a non-zero code</td></tr>
+  <tr><td><code>job-cancelled</code></td><td><code>Job</code></td><td>A job was cancelled before starting</td></tr>
+  <tr><td><code>job-retrying</code></td><td><code>Job</code></td><td>A job failed and is being retried</td></tr>
+  <tr><td><code>job-heartbeat</code></td><td><code>{ jobId, elapsed, logSinceLast }</code></td><td>Periodic heartbeat while job is running</td></tr>
+  <tr><td><code>stats</code></td><td><code>QueueStats</code></td><td>Queue statistics update (on each poll tick)</td></tr>
+</table>
+<p>On connect, the server immediately sends a <code>stats</code> event with current queue counts.</p>
+
+<h2 id="examples">Examples</h2>
+
+<h3>Create a job</h3>
+<pre><code>curl -X POST http://localhost:3457/api/jobs \
+  -H "Content-Type: application/json" \
+  -d '{
+    "title": "Refactor auth middleware",
+    "prompt": "Review src/middleware/auth.ts and suggest improvements for token validation, error handling, and performance.",
+    "model": "claude-sonnet-4-6",
+    "tags": ["refactor", "auth"],
+    "timeoutMs": 300000
+  }'</code></pre>
+
+<h3>Create a project</h3>
+<pre><code>curl -X POST http://localhost:3457/api/projects \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "my-app",
+    "rootPath": "/home/user/projects/my-app",
+    "settings": {
+      "contextFiles": ["README.md", "CONTRIBUTING.md"],
+      "defaultModel": "claude-sonnet-4-6",
+      "defaultExecutionMode": "api"
+    }
+  }'</code></pre>
+
+<h3>Chatbot ask</h3>
+<pre><code>curl -X POST http://localhost:3457/api/chatbot/ask \
+  -H "Content-Type: application/json" \
+  -d '{
+    "projectId": "abc12345",
+    "question": "How is the authentication flow structured?",
+    "conversationId": "def67890"
+  }'</code></pre>
+
+<h3>Improve a prompt</h3>
+<pre><code>curl -X POST http://localhost:3457/api/prompt/improve \
+  -H "Content-Type: application/json" \
+  -d '{
+    "prompt": "fix the login bug",
+    "action": "expand"
+  }'</code></pre>
+
+<h3>Move a ticket</h3>
+<pre><code>curl -X POST http://localhost:3457/api/tickets/tkt001/move \
+  -H "Content-Type: application/json" \
+  -d '{ "column": "in-progress" }'</code></pre>
+
+<h2 id="models">Valid Models</h2>
+<p>Job creation validates against these model IDs:</p>
+<table>
+  <tr><th>Model ID</th><th>Description</th></tr>
+  <tr><td><code>claude-sonnet-4-6</code></td><td>Sonnet 4.6</td></tr>
+  <tr><td><code>claude-opus-4-7</code></td><td>Opus 4.7</td></tr>
+  <tr><td><code>claude-sonnet-4-20250514</code></td><td>Sonnet 4 (pinned date)</td></tr>
+  <tr><td><code>claude-opus-4-20250514</code></td><td>Opus 4 (pinned date)</td></tr>
+  <tr><td><code>claude-haiku-4-20250501</code></td><td>Haiku 4 (pinned date)</td></tr>
+</table>
+
+<h2 id="statuses">Job Statuses</h2>
+<table>
+  <tr><th>Status</th><th>Meaning</th></tr>
+  <tr><td><code>pending</code></td><td>Queued, awaiting execution</td></tr>
+  <tr><td><code>running</code></td><td>Currently executing</td></tr>
+  <tr><td><code>retrying</code></td><td>Auto-retry after failure</td></tr>
+  <tr><td><code>completed</code></td><td>Exit code 0</td></tr>
+  <tr><td><code>failed</code></td><td>Non-zero exit, retries exhausted</td></tr>
+  <tr><td><code>cancelled</code></td><td>Cancelled before execution</td></tr>
+  <tr><td><code>stopped</code></td><td>Killed during execution (SIGTERM)</td></tr>
+</table>
+
+<footer>
+  <p><a href="/wiki/">Home</a> &middot; <a href="/wiki/architecture.html">Architecture</a></p>
+</footer>
+</main>
+</body>
+</html>

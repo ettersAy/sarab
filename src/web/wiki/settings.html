@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Settings & Providers — SARAB Wiki</title>
+<link rel="stylesheet" href="/wiki/wiki.css">
+</head>
+<body>
+<nav>
+  <div class="wiki-logo"><a href="/wiki/">SARAB Wiki</a></div>
+  <div class="nav-section">Overview</div>
+  <a href="/wiki/">Home</a>
+  <a href="/wiki/architecture.html">Architecture</a>
+  <div class="nav-section">Features</div>
+  <a href="/wiki/execution.html">Execution & Heartbeat</a>
+  <a href="/wiki/kanban.html">Kanban Board</a>
+  <a href="/wiki/chatbot.html">Project Chatbot</a>
+  <a href="/wiki/persistence.html">Persistence</a>
+  <a href="/wiki/settings.html" class="active">Settings & Providers</a>
+  <div class="nav-section">Reference</div>
+  <a href="/wiki/api-reference.html">API Reference</a>
+  <div class="nav-section">Guides</div>
+  <a href="/wiki/testing.html">Testing</a>
+  <a href="/wiki/development.html">Development</a>
+  <div class="nav-section">Links</div>
+  <a href="/" target="_blank">Open App &#8599;</a>
+  <a href="https://github.com/ettersAy/sarab" target="_blank">GitHub &#8599;</a>
+</nav>
+<main>
+
+<h1>Settings &amp; Providers</h1>
+
+<p>Settings are stored in <code>data/settings.json</code> as a single JSON file. The <code>SettingsStore</code> handles load, save, and validation. The frontend Settings view (<code>js/views/settings.js</code>) exposes provider management and execution defaults through <code>PUT /api/settings</code>.</p>
+
+<h2>AI Providers</h2>
+
+<p>SARAB supports two provider types:</p>
+<table>
+  <tr><th>Type</th><th>Value</th><th>Executor</th><th>Description</th></tr>
+  <tr><td>Claude CLI</td><td><code>"claude-cli"</code></td><td><code>ClaudeExecutor</code></td><td>Spawns <code>claude -p "prompt"</code> locally. Configured via <code>claudeCmd</code> and <code>claudeFlags</code>.</td></tr>
+  <tr><td>OpenAI-compatible</td><td><code>"openai-compatible"</code></td><td><code>DeepSeekExecutor</code></td><td>HTTP POST to any OpenAI-compatible API (DeepSeek, OpenAI, etc.). Configured via <code>baseUrl</code> and <code>apiKeyEnvVar</code>.</td></tr>
+</table>
+
+<h3>Provider Fields</h3>
+<pre><code>{
+  "id": "claude-cli-default",        // Auto-generated, 8-char UUID
+  "name": "Claude CLI",              // Human-readable, must be unique
+  "type": "claude-cli",              // "claude-cli" | "openai-compatible"
+  "apiKeyEnvVar": "ANTHROPIC_AUTH_TOKEN", // Environment variable name
+  "defaultModel": "claude-sonnet-4-6",    // Default model for this provider
+  "enabled": true,                   // Toggle on/off
+  "isDefault": false,                // Only one provider can be default
+  "baseUrl": "",                     // Base URL for openai-compatible types
+  "claudeCmd": "claude",             // CLI command (claude-cli only)
+  "claudeFlags": "--dangerously-skip-permissions" // Extra flags (claude-cli only)
+}</code></pre>
+
+<h2>Provider CRUD</h2>
+<table>
+  <tr><th>Operation</th><th>Endpoint</th><th>Notes</th></tr>
+  <tr><td>List all</td><td><code>GET /api/settings/providers</code></td><td>Returns array of <code>AIProvider</code></td></tr>
+  <tr><td>Create</td><td><code>POST /api/settings/providers</code></td><td>Requires <code>name</code>, <code>type</code>, <code>apiKeyEnvVar</code>, <code>defaultModel</code>. Name must be unique. If no providers exist, new one becomes default.</td></tr>
+  <tr><td>Edit</td><td><code>PUT /api/settings/providers/:id</code></td><td>Partial update — merged into existing provider. Setting <code>isDefault: true</code> clears all others.</td></tr>
+  <tr><td>Set default</td><td><code>POST /api/settings/providers/:id/default</code></td><td>Also updates <code>defaultProviderId</code> at the top level.</td></tr>
+  <tr><td>Delete</td><td><code>DELETE /api/settings/providers/:id</code></td><td>Rejected with <code>ValidationError</code> if the provider is the default. At least one provider must always exist.</td></tr>
+</table>
+
+<div class="callout warn">
+  <strong>Default provider cannot be deleted.</strong> Set another provider as default first, then delete.
+</div>
+
+<h2>Execution Defaults</h2>
+<p>These apply to every new job unless overridden per-job:</p>
+<pre><code>{
+  "executionDefaults": {
+    "timeoutMs": 0,            // 0 = no hard timeout (unlimited)
+    "idleTimeoutMs": 1800000,  // 30 min — kill if no output received
+    "maxRetries": 2            // Retry attempts on failure before giving up
+  }
+}</code></pre>
+<ul>
+  <li><strong>timeoutMs</strong> — Hard wall-clock timeout. 0 means run forever (until completion or idle timeout).</li>
+  <li><strong>idleTimeoutMs</strong> — Kills the process if no stdout/stderr output for this duration. The heartbeat monitor in <code>ClaudeExecutor</code> tracks this.</li>
+  <li><strong>maxRetries</strong> — Number of automatic retries when a job fails. The queue manager increments <code>attempt</code> and re-queues.</li>
+</ul>
+
+<h2>Prompt Improvement Settings</h2>
+<p>The prompt improvement feature (reformulate, shorten, expand, correct, improve) uses a dedicated AI provider:</p>
+<pre><code>{
+  "promptImprovement": {
+    "providerId": "claude-cli-default",  // Which provider to use
+    "model": "claude-sonnet-4-6"         // Model for improvement calls
+  }
+}</code></pre>
+<p>Endpoints: <code>POST /api/prompt/reformulate</code>, <code>/improve</code>, <code>/correct</code>, <code>/shorten</code>, <code>/expand</code>.</p>
+
+<h2>Validation and Fallback</h2>
+<p>The <code>SettingsStore.load()</code> method applies two safety mechanisms:</p>
+<ul>
+  <li><strong>Deep-merge with defaults</strong> — Any missing keys in <code>executionDefaults</code> or <code>promptImprovement</code> are filled from the baked-in defaults. New config keys (added in future versions) never break existing settings files.</li>
+  <li><strong>Stale defaultProviderId recovery</strong> — If the saved <code>defaultProviderId</code> does not match any provider in the list, it is automatically reset to the first enabled provider (or the first provider overall) and a warning is logged.</li>
+</ul>
+<div class="callout">
+  The <code>PUT /api/settings</code> endpoint also rejects a request where <code>defaultProviderId</code> is not found in the submitted <code>providers</code> array — returns <code>ValidationError</code> with 400 status.
+</div>
+
+<h2>Per-Project Settings</h2>
+<p>Projects can override execution defaults via the <code>settings</code> field in <code>project.json</code>:</p>
+<pre><code>{
+  "settings": {
+    "defaultModel": "claude-sonnet-4-6",
+    "defaultExecutionMode": "api",       // "api" | "terminal"
+    "defaultSessionMode": "resume",      // "new" | "resume" | "latest"
+    "templates": {
+      "reformulate": "Rewrite this prompt...",
+      "ticketSplit": "Split the following into tickets...",
+      "implementation": "Implement the following...",
+      "test": "Write tests for...",
+      "reflection": "Reflect on..."
+    }
+  }
+}</code></pre>
+<p>Template strings are used by the chatbot and prompt improvement features to provide project-specific context when generating prompts.</p>
+
+<h2>API Endpoints Summary</h2>
+<table>
+  <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/settings</code></td><td>Get full settings (providers, defaults, promptImprovement)</td></tr>
+  <tr><td><span class="badge badge-put">PUT</span></td><td><code>/api/settings</code></td><td>Replace entire settings object (validates defaultProviderId)</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/settings/providers</code></td><td>List all providers</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/settings/providers</code></td><td>Create a new provider</td></tr>
+  <tr><td><span class="badge badge-put">PUT</span></td><td><code>/api/settings/providers/:id</code></td><td>Update a provider (partial merge)</td></tr>
+  <tr><td><span class="badge badge-delete">DELETE</span></td><td><code>/api/settings/providers/:id</code></td><td>Delete provider (default cannot be deleted)</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/settings/providers/:id/default</code></td><td>Set a provider as the default</td></tr>
+</table>
+
+<footer>
+  <p><a href="/wiki/">Home</a> &middot; <a href="/wiki/persistence.html">Persistence</a></p>
+</footer>
+</main>
+</body>
+</html>
