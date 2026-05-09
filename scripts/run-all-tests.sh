@@ -4,6 +4,10 @@
 # ───────────────────────────────────────────────────────────────────
 set -euo pipefail
 
+echo "=== JS Syntax Check ==="
+node -c src/web/app.js && echo "OK" || { echo "FAILED"; exit 1; }
+
+echo ""
 echo "=== TypeScript Check ==="
 npx tsc --noEmit && echo "OK" || { echo "FAILED"; exit 1; }
 

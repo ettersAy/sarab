@@ -191,7 +191,7 @@ function renderProjects() {
         </div>
       </div>
       ${cards}
-      <div id="project-form" class="hidden" style="margin-top:20px"></div>
+
     </div>`;
 
   document.getElementById("btn-refresh")?.addEventListener("click", async () => {
@@ -219,11 +219,10 @@ function renderProjects() {
 }
 
 function showProjectForm() {
-  const form = document.getElementById("project-form");
-  form.classList.remove("hidden");
-  form.innerHTML = `
+  const modal = document.getElementById("project-modal");
+  document.getElementById("project-modal-title").textContent = "New Project";
+  document.getElementById("project-modal-body").innerHTML = `
     <div class="form-container">
-      <h3>New Project</h3>
       <div class="form-group">
         <label>Project Name</label>
         <input id="f-project-name" type="text" placeholder="e.g. my-app" required maxlength="100">
@@ -239,6 +238,8 @@ function showProjectForm() {
       </div>
     </div>`;
 
+  modal.classList.remove("hidden");
+
   document.getElementById("btn-create-project")?.addEventListener("click", async () => {
     const name = document.getElementById("f-project-name").value.trim();
     const rootPath = document.getElementById("f-project-path").value.trim();
@@ -247,22 +248,22 @@ function showProjectForm() {
       await api("POST", "/api/projects", { name, rootPath });
       await loadProjects();
       renderProjects();
+      modal.classList.add("hidden");
       showToast("Project created", "success");
     } catch (err) { showToast(err.message, "error"); }
   });
   document.getElementById("btn-cancel-project")?.addEventListener("click", () => {
-    form.classList.add("hidden");
+    modal.classList.add("hidden");
   });
 }
 
 function showEditProjectForm(id) {
   const p = projects.find((x) => x.id === id);
   if (!p) { showToast("Project not found", "error"); return; }
-  const form = document.getElementById("project-form");
-  form.classList.remove("hidden");
-  form.innerHTML = `
+  const modal = document.getElementById("project-modal");
+  document.getElementById("project-modal-title").textContent = "Edit Project";
+  document.getElementById("project-modal-body").innerHTML = `
     <div class="form-container">
-      <h3>Edit Project</h3>
       <div class="form-group">
         <label>Project Name</label>
         <input id="f-edit-project-name" type="text" value="${h(p.name)}" required maxlength="100">
@@ -299,6 +300,8 @@ function showEditProjectForm(id) {
       </div>
     </div>`;
 
+  modal.classList.remove("hidden");
+
   document.getElementById("btn-save-edit-project")?.addEventListener("click", async () => {
     const name = document.getElementById("f-edit-project-name").value.trim();
     const rootPath = document.getElementById("f-edit-project-path").value.trim();
@@ -317,11 +320,12 @@ function showEditProjectForm(id) {
       });
       await loadProjects();
       renderProjects();
+      modal.classList.add("hidden");
       showToast("Project updated", "success");
     } catch (err) { showToast(err.message, "error"); }
   });
   document.getElementById("btn-cancel-edit-project")?.addEventListener("click", () => {
-    form.classList.add("hidden");
+    modal.classList.add("hidden");
   });
 }
 
@@ -933,14 +937,25 @@ function showEditJobForm(id) {
   document.getElementById("btn-cancel-edit")?.addEventListener("click", () => updateView());
 }
 
+// ── Modal close handlers ──────────────────────────────────────────────
 document.getElementById("log-close")?.addEventListener("click", () => {
   document.getElementById("log-modal")?.classList.add("hidden");
 });
 document.getElementById("log-modal")?.querySelector(".modal-overlay")?.addEventListener("click", () => {
   document.getElementById("log-modal")?.classList.add("hidden");
 });
+// Ticket, project, provider modals — close buttons use class selectors
+document.querySelectorAll(".ticket-modal-close, .project-modal-close, .provider-modal-close").forEach((btn) => {
+  btn.addEventListener("click", () => btn.closest(".modal")?.classList.add("hidden"));
+});
+// Overlay click for form modals
+document.querySelectorAll("#ticket-modal .modal-overlay, #project-modal .modal-overlay, #provider-modal .modal-overlay").forEach((ov) => {
+  ov.addEventListener("click", () => ov.closest(".modal")?.classList.add("hidden"));
+});
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") document.getElementById("log-modal")?.classList.add("hidden");
+  if (e.key === "Escape") {
+    document.querySelectorAll(".modal").forEach((m) => m.classList.add("hidden"));
+  }
 });
 
 // ── Toast ───────────────────────────────────────────────────────────
@@ -1003,7 +1018,7 @@ function renderKanban() {
         </div>
       </div>
       <div class="kanban-board">${columnHtml}</div>
-      <div id="ticket-form" class="hidden" style="margin-top:20px"></div>
+
     </div>`;
 
   document.getElementById("btn-refresh-kanban")?.addEventListener("click", async () => {
@@ -1017,12 +1032,13 @@ function renderKanban() {
   });
   document.getElementById("btn-new-ticket")?.addEventListener("click", showTicketForm);
   bindTicketActions();
+  bindKanbanDrag();
 }
 
 function renderTicketCard(t) {
   const prioClass = `prio-${t.priority}`;
   return `
-    <div class="kanban-card ${prioClass}" data-id="${t.id}">
+    <div class="kanban-card ${prioClass}" data-id="${t.id}" draggable="true">
       <div class="kanban-card-title">${h(t.title)}</div>
       ${t.description ? `<div class="kanban-card-desc">${h(t.description.slice(0, 100))}${t.description.length > 100 ? "..." : ""}</div>` : ""}
       <div class="kanban-card-meta">
@@ -1073,11 +1089,10 @@ function bindTicketActions() {
 }
 
 function showTicketForm() {
-  const form = document.getElementById("ticket-form");
-  form.classList.remove("hidden");
-  form.innerHTML = `
+  const modal = document.getElementById("ticket-modal");
+  document.getElementById("ticket-modal-title").textContent = "New Ticket";
+  document.getElementById("ticket-modal-body").innerHTML = `
     <div class="form-container">
-      <h3>New Ticket</h3>
       <div class="form-group">
         <label>Title</label>
         <input id="t-title" type="text" placeholder="Ticket title" required maxlength="200">
@@ -1111,6 +1126,8 @@ function showTicketForm() {
       </div>
     </div>`;
 
+  modal.classList.remove("hidden");
+
   document.getElementById("btn-create-ticket")?.addEventListener("click", async () => {
     const title = document.getElementById("t-title").value.trim();
     if (!title) { showToast("Title is required", "error"); return; }
@@ -1126,22 +1143,22 @@ function showTicketForm() {
       });
       await loadTickets();
       renderKanban();
+      modal.classList.add("hidden");
       showToast("Ticket created", "success");
     } catch (err) { showToast(err.message, "error"); }
   });
   document.getElementById("btn-cancel-ticket")?.addEventListener("click", () => {
-    form.classList.add("hidden");
+    modal.classList.add("hidden");
   });
 }
 
 function showMoveTicketForm(id) {
   const t = tickets.find((x) => x.id === id);
   if (!t) return;
-  const form = document.getElementById("ticket-form");
-  form.classList.remove("hidden");
-  form.innerHTML = `
+  const modal = document.getElementById("ticket-modal");
+  document.getElementById("ticket-modal-title").textContent = "Move Ticket — " + t.title;
+  document.getElementById("ticket-modal-body").innerHTML = `
     <div class="form-container">
-      <h3>Move Ticket — ${h(t.title)}</h3>
       <div class="form-group">
         <label>Move to Column</label>
         <select id="move-column">${KANBAN_COLUMNS.map((c) => `<option value="${c}" ${t.column === c ? "selected" : ""}>${c}</option>`).join("")}</select>
@@ -1152,27 +1169,29 @@ function showMoveTicketForm(id) {
       </div>
     </div>`;
 
+  modal.classList.remove("hidden");
+
   document.getElementById("btn-move-ticket")?.addEventListener("click", async () => {
     try {
       await api("POST", `/api/tickets/${id}/move`, { column: document.getElementById("move-column").value });
       await loadTickets();
       renderKanban();
+      modal.classList.add("hidden");
       showToast("Ticket moved", "success");
     } catch (err) { showToast(err.message, "error"); }
   });
   document.getElementById("btn-cancel-move")?.addEventListener("click", () => {
-    form.classList.add("hidden");
+    modal.classList.add("hidden");
   });
 }
 
 function showEditTicketForm(id) {
   const t = tickets.find((x) => x.id === id);
   if (!t) return;
-  const form = document.getElementById("ticket-form");
-  form.classList.remove("hidden");
-  form.innerHTML = `
+  const modal = document.getElementById("ticket-modal");
+  document.getElementById("ticket-modal-title").textContent = "Edit Ticket — " + t.id;
+  document.getElementById("ticket-modal-body").innerHTML = `
     <div class="form-container">
-      <h3>Edit Ticket — ${h(t.id)}</h3>
       <div class="form-group">
         <label>Title</label>
         <input id="et-title" type="text" value="${h(t.title)}" required maxlength="200">
@@ -1199,6 +1218,8 @@ function showEditTicketForm(id) {
       </div>
     </div>`;
 
+  modal.classList.remove("hidden");
+
   document.getElementById("btn-save-ticket")?.addEventListener("click", async () => {
     const tags = document.getElementById("et-tags").value.split(",").map((s) => s.trim()).filter(Boolean);
     try {
@@ -1210,11 +1231,12 @@ function showEditTicketForm(id) {
       });
       await loadTickets();
       renderKanban();
+      modal.classList.add("hidden");
       showToast("Ticket saved", "success");
     } catch (err) { showToast(err.message, "error"); }
   });
   document.getElementById("btn-cancel-edit-ticket")?.addEventListener("click", () => {
-    form.classList.add("hidden");
+    modal.classList.add("hidden");
   });
 }
 
@@ -1252,7 +1274,7 @@ async function renderSettings() {
       <h3 style="margin:20px 0 8px">AI Providers</h3>
       ${providerCards || '<p style="color:var(--text-dim)">No providers configured.</p>'}
 
-      <div id="provider-form" class="hidden" style="margin-top:16px"></div>
+
       <button class="btn btn-primary btn-sm" id="btn-add-provider" style="margin-top:12px">Add Provider</button>
 
       <h3 style="margin:24px 0 8px">Execution Defaults</h3>
@@ -1329,11 +1351,10 @@ async function renderSettings() {
 }
 
 function showAddProviderForm() {
-  const form = document.getElementById("provider-form");
-  form.classList.remove("hidden");
-  form.innerHTML = `
+  const modal = document.getElementById("provider-modal");
+  document.getElementById("provider-modal-title").textContent = "Add Provider";
+  document.getElementById("provider-modal-body").innerHTML = `
     <div class="form-container">
-      <h3>Add Provider</h3>
       <div class="form-row">
         <div class="form-group">
           <label>Name</label>
@@ -1378,6 +1399,8 @@ function showAddProviderForm() {
       </div>
     </div>`;
 
+  modal.classList.remove("hidden");
+
   document.getElementById("p-type")?.addEventListener("change", (e) => {
     const isCLI = e.target.value === "claude-cli";
     document.getElementById("p-claude-fields").classList.toggle("hidden", !isCLI);
@@ -1396,22 +1419,21 @@ function showAddProviderForm() {
     } else {
       body.baseUrl = document.getElementById("p-base-url").value.trim() || undefined;
     }
-    try { await api("POST", "/api/settings/providers", body); renderSettings(); showToast("Provider added", "success"); }
+    try { await api("POST", "/api/settings/providers", body); renderSettings(); modal.classList.add("hidden"); showToast("Provider added", "success"); }
     catch (err) { showToast(err.message, "error"); }
   });
   document.getElementById("btn-cancel-provider")?.addEventListener("click", () => {
-    form.classList.add("hidden");
+    modal.classList.add("hidden");
   });
 }
 
 function showEditProviderForm(id, s) {
   const p = s.providers.find((x) => x.id === id);
   if (!p) { showToast("Provider not found", "error"); return; }
-  const form = document.getElementById("provider-form");
-  form.classList.remove("hidden");
-  form.innerHTML = `
+  const modal = document.getElementById("provider-modal");
+  document.getElementById("provider-modal-title").textContent = "Edit Provider";
+  document.getElementById("provider-modal-body").innerHTML = `
     <div class="form-container">
-      <h3>Edit Provider</h3>
       <div class="form-row">
         <div class="form-group">
           <label>Name</label>
@@ -1449,6 +1471,8 @@ function showEditProviderForm(id, s) {
       </div>
     </div>`;
 
+  modal.classList.remove("hidden");
+
   document.getElementById("btn-save-edit-provider")?.addEventListener("click", async () => {
     const patch = {
       name: document.getElementById("pe-name").value.trim(),
@@ -1460,11 +1484,11 @@ function showEditProviderForm(id, s) {
       patch.claudeCmd = document.getElementById("pe-claude-cmd").value.trim();
       patch.claudeFlags = document.getElementById("pe-claude-flags").value.trim();
     }
-    try { await api("PUT", `/api/settings/providers/${id}`, patch); renderSettings(); showToast("Provider updated", "success"); }
+    try { await api("PUT", `/api/settings/providers/${id}`, patch); renderSettings(); modal.classList.add("hidden"); showToast("Provider updated", "success"); }
     catch (err) { showToast(err.message, "error"); }
   });
   document.getElementById("btn-cancel-edit-provider")?.addEventListener("click", () => {
-    form.classList.add("hidden");
+    modal.classList.add("hidden");
   });
 }
 

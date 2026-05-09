@@ -411,6 +411,16 @@ main {
 
 .modal-close:hover { color: var(--text); }
 
+.modal-content.modal-form {
+  max-width: 600px;
+}
+
+.modal-body {
+  padding: 16px 18px;
+  overflow: auto;
+  flex: 1;
+}
+
 .log-body {
   padding: 16px 18px;
   overflow: auto;
@@ -702,6 +712,18 @@ main {
   display: flex;
   gap: 4px;
   flex-wrap: wrap;
+}
+
+.kanban-card.dragging {
+  opacity: 0.4;
+  transform: scale(0.95);
+}
+
+.kanban-cards.drag-over {
+  background: rgba(88, 166, 255, 0.08);
+  border-radius: 6px;
+  outline: 2px dashed var(--accent-dim);
+  outline-offset: -2px;
 }
 
 .kanban-summary {

@@ -634,6 +634,37 @@ Found: executor already supports cwd, --resume, sessionId capture. Missing: exec
 
 ---
 
+## Mission 005: Self-Reflection (2026-05-09)
+
+### Analysis of all 4 missions (001-004)
+
+**Patterns of repeated mistakes:**
+1. TypeScript syntax (`: any`) in JS files — 3 occurrences across missions 002, 004
+2. Missing CSS class definitions — 2 occurrences (.hidden, .recent-jobs)
+3. app.js grew from 500→1488 lines across 4 missions
+4. Settings/config stored but never wired at runtime — 2 occurrences
+5. Tests asserting exact counts failed when features added — 3 occurrences
+
+**Architecture assessment:**
+- Backend: 9/10 — clean DI, consistent patterns, well-tested
+- Frontend: 5/10 — 1488-line monolithic JS, no modules, organic CSS
+- Testing: 8/10 — 87 tests, 0 failures, but gaps in Kanban UI tests
+
+**Improvements implemented:**
+- `node -c src/web/app.js` added to `run-all-tests.sh` (prevents TS-in-JS bugs)
+- Comprehensive reflection document at `missions/01-in-progress/005_project_chatbot.md`
+
+**Recommendations for next mission:**
+- Split app.js into modules (core/views/actions) before it hits 2000 lines
+- Add ESLint with TS-in-JS detection
+- Add Kanban UI Playwright tests
+- Add auth layer if deploying beyond localhost
+
+### Test results: 87 tests, 0 failures
+- 71 fast Playwright (8.0s) + 16 smoke
+
+---
+
 ## Phase 1 — Discovery (2026-05-09)
 Issue: [#1](https://github.com/ettersAy/sarab/issues/1) — Audit project, identify where Kanban missions & project-level AI settings should fit.
 
