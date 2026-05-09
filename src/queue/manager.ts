@@ -81,6 +81,44 @@ export class QueueManager extends EventEmitter {
     return updated;
   }
 
+  stopJob(jobId: string): Job {
+    const job = this.jobStore.get(jobId);
+    if (!job) throw new NotFoundError("Job", jobId);
+    if (job.status !== "running" && job.status !== "retrying") {
+      throw new ValidationError(`Cannot stop job in '${job.status}' status`);
+    }
+    if (this.executor.kill) this.executor.kill();
+    const updated = this.jobStore.update(jobId, {
+      status: "stopped",
+      completedAt: new Date().toISOString(),
+      stoppedAt: new Date().toISOString(),
+      error: "Stopped by user",
+    });
+    this.activeJobs.delete(jobId);
+    this.emit("job-cancelled", { type: "job-cancelled", job: updated });
+    return updated;
+  }
+
+  resumeJob(jobId: string): Job {
+    const job = this.jobStore.get(jobId);
+    if (!job) throw new NotFoundError("Job", jobId);
+    if (job.status !== "stopped") {
+      throw new ValidationError(`Cannot resume job in '${job.status}' status`);
+    }
+    const updated = this.jobStore.update(jobId, {
+      status: "pending",
+      attempt: job.attempt,
+      exitCode: null,
+      error: null,
+      startedAt: null,
+      completedAt: null,
+      stoppedAt: null,
+      logFile: null,
+      resumedFrom: job.resumedFrom || job.id,
+    });
+    return updated;
+  }
+
   private recoverStaleJobs(): void {
     const stale = this.jobStore.list().filter(
       (j) => j.status === "running" || j.status === "retrying"
@@ -167,6 +205,9 @@ export class QueueManager extends EventEmitter {
         prompt: job.prompt,
         model: job.model,
         timeoutMs: job.timeoutMs,
+        onOutput: (chunk: string) => {
+          this.logStore.write(job.id, chunk);
+        },
       };
 
       // Resolve project cwd

@@ -54,11 +54,15 @@ export class JobStore {
       createdAt: new Date().toISOString(),
       startedAt: null,
       completedAt: null,
+      stoppedAt: null,
       logFile: null,
       tags: input.tags ?? [],
       projectId: input.projectId,
       sessionId: input.sessionId,
       sessionMode: input.sessionMode,
+      executionMode: input.executionMode,
+      promptFile: input.promptFile,
+      resumedFrom: undefined,
     };
     this.cache.set(job.id, job);
     this.persistOne(job);
@@ -81,7 +85,7 @@ export class JobStore {
   }
 
   stats(): QueueStats {
-    let pending = 0, running = 0, completed = 0, failed = 0, cancelled = 0;
+    let pending = 0, running = 0, completed = 0, failed = 0, cancelled = 0, stopped = 0;
     for (const j of this.cache.values()) {
       switch (j.status) {
         case "pending": pending++; break;
@@ -89,9 +93,10 @@ export class JobStore {
         case "completed": completed++; break;
         case "failed": failed++; break;
         case "cancelled": cancelled++; break;
+        case "stopped": stopped++; break;
       }
     }
-    return { pending, running, completed, failed, cancelled, total: this.cache.size };
+    return { pending, running, completed, failed, cancelled, stopped, total: this.cache.size };
   }
 
   getNextPending(): Job | undefined {

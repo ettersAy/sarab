@@ -55,6 +55,18 @@ Browser (SSE) → Express server → QueueManager (poll loop) → ClaudeExecutor
 | Logging | `logger.ts` |
 | SSE events | `queue/sse.ts`, `queue/manager.ts` |
 
+## Execution modes
+
+Two execution modes via `executionMode` field on Job:
+
+| Mode | Behavior |
+|------|----------|
+| `"api"` (default) | One-shot Claude CLI execution via `-p "prompt"` |
+| `"terminal"` | Runs from project root, supports stop/resume, live log streaming |
+
+Stop/Resume: `POST /api/jobs/:id/stop` (kills process, SIGTERM→SIGKILL), `POST /api/jobs/:id/resume` (re-queues as pending).
+JobStatus includes `"stopped"` (orange, between cancelled and failed).
+
 ## Session execution modes
 
 5 modes supported via `sessionMode` field on Job:

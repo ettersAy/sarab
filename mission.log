@@ -528,3 +528,49 @@ Three parallel audit agents found 20+ issues across the codebase:
 
 ### Test results: 76 tests, 0 failures
 - 60 fast Playwright (8.2s) + 16 smoke
+
+---
+
+## Mission 003: Execution Modes (2026-05-09)
+
+### Phase 1 — Audit
+Found: executor already supports cwd, --resume, sessionId capture. Missing: executionMode field, stop/resume actions, live log streaming, kill support.
+
+### Phase 2-3 — Data model + execution
+- Added `ExecutionMode` type (`"api" | "terminal"`) to Job model
+- Added `stoppedAt`, `resumedFrom`, `promptFile` fields to Job
+- Added `JobStatus: "stopped"` to status types
+- `QueueStats` now includes `stopped` count
+- `ClaudeExecutor`: added `kill()` method, `currentProcess` tracking, `onOutput` callback for live streaming
+
+### Phase 4 — UI changes
+- Execution mode selector (API/Terminal) in submit form
+- Stop button for running/retrying jobs
+- Resume button for stopped jobs
+- Stopped status badge (orange) and stat card
+
+### Phase 5 — Long-running support
+- Executor passes `onOutput` callback for live log streaming during execution
+- LogStore.write called per-chunk during execution (real-time log viewing)
+
+### Phase 6-7 — Stop/Resume actions
+- `POST /api/jobs/:id/stop` — kills running process (SIGTERM → SIGKILL), marks as "stopped"
+- `POST /api/jobs/:id/resume` — re-queues stopped job as "pending", preserves attempt count
+- `QueueManager.stopJob()` calls `executor.kill()`, tracks `activeJobs`
+
+### Phase 8 — Tests
+- 3 new execution mode tests: create with executionMode, stop validation, resume validation
+- Updated stat card count (6→7), filter count, stopped stat assertion
+- 68 tests total (63 fast + 5 slow)
+
+### Phase 9 — Audit
+- app.js at 1176 lines (over 1K — noted for future split into modules)
+- manager.ts at 308 lines (acceptable)
+- All other files under 200 lines
+
+### Phase 10 — Final test/fix loop
+- 68 Playwright tests: 0 failures (53.4s)
+- TypeScript strict mode: clean
+- JS syntax: clean
+
+### Commit: 8b1f861

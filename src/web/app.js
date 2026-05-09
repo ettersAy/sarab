@@ -112,7 +112,7 @@ function renderView() {
 
 // ── Dashboard ───────────────────────────────────────────────────────
 function renderDashboard() {
-  const statuses = ["pending", "running", "completed", "failed", "cancelled", "total"];
+  const statuses = ["pending", "running", "completed", "failed", "cancelled", "stopped", "total"];
   const cards = statuses
     .map(
       (s) => `
@@ -347,7 +347,7 @@ function renderQueue() {
   if (queuePage >= totalPages) queuePage = Math.max(0, totalPages - 1);
   const paged = filtered.slice(queuePage * PAGE_SIZE, (queuePage + 1) * PAGE_SIZE);
 
-  const filterBtns = ["all", "pending", "running", "completed", "failed", "cancelled"]
+  const filterBtns = ["all", "pending", "running", "completed", "failed", "cancelled", "stopped"]
     .map(
       (f) =>
         `<button class="filter-btn${queueFilter === f ? " active" : ""}" data-filter="${f}">${f}</button>`
@@ -434,6 +434,8 @@ function renderJobRow(j) {
       <td>
         <div class="btn-group">
           <button class="btn btn-sm" data-action="detail" data-id="${j.id}">View</button>
+          ${j.status === "running" || j.status === "retrying" ? `<button class="btn btn-danger btn-sm" data-action="stop" data-id="${j.id}">Stop</button>` : ""}
+          ${j.status === "stopped" ? `<button class="btn btn-sm" data-action="resume" data-id="${j.id}">Resume</button>` : ""}
           ${j.status === "pending" ? `<button class="btn btn-danger btn-sm" data-action="cancel" data-id="${j.id}">Cancel</button>` : ""}
           ${j.status === "completed" || j.status === "failed" ? `<button class="btn btn-sm" data-action="retry" data-id="${j.id}">Retry</button>` : ""}
           ${j.status === "completed" || j.status === "failed" ? `<button class="btn btn-sm" data-action="log" data-id="${j.id}">Log</button>` : ""}
@@ -454,6 +456,8 @@ function bindJobActions() {
       if (action === "log") { viewLog(id); return; }
       if (action === "detail") { viewDetail(id); return; }
       if (action === "duplicate") { duplicateJob(id); return; }
+      if (action === "stop") { stopJob(id); return; }
+      if (action === "resume") { resumeJob(id); return; }
       if (action === "edit") { showEditJobForm(id); return; }
 
       const origText = btn.textContent;
@@ -524,10 +528,20 @@ function renderSubmit() {
           </div>
           <div class="form-row">
             <div class="form-group">
+              <label for="f-execution-mode">Execution Mode</label>
+              <select id="f-execution-mode">
+                <option value="api">API (one-shot)</option>
+                <option value="terminal">Terminal (project root)</option>
+              </select>
+              <div class="hint">API: standard execution. Terminal: run from project root, supports stop/resume.</div>
+            </div>
+            <div class="form-group">
               <label for="f-project">Project</label>
               <select id="f-project"><option value="">None (standalone)</option>${projectOpts}</select>
-              <div class="hint">Link this prompt to a project for root-path execution and session tracking.</div>
+              <div class="hint">Link this prompt to a project for root-path execution.</div>
             </div>
+          </div>
+          <div class="form-row">
             <div class="form-group">
               <label for="f-session-mode">Session Mode</label>
               <select id="f-session-mode">
@@ -655,6 +669,7 @@ async function handleSubmit(e) {
       tags,
       projectId,
       sessionMode: document.getElementById("f-session-mode")?.value || undefined,
+      executionMode: document.getElementById("f-execution-mode")?.value || undefined,
     };
     if (body.sessionMode === "resume") {
       body.sessionId = document.getElementById("f-session-id")?.value || undefined;
@@ -710,6 +725,24 @@ async function retryJob(id) {
   await api("POST", `/api/jobs/${id}/retry`);
   await loadJobs();
   updateView();
+}
+
+async function stopJob(id) {
+  if (!confirm("Stop job " + id + "?")) return;
+  try {
+    await api("POST", `/api/jobs/${id}/stop`);
+    await loadJobs();
+    updateView();
+  } catch (err) { showToast(err.message, "error"); }
+}
+
+async function resumeJob(id) {
+  try {
+    await api("POST", `/api/jobs/${id}/resume`);
+    showToast(`Job ${id} resumed`, "success");
+    await loadJobs();
+    updateView();
+  } catch (err) { showToast(err.message, "error"); }
 }
 
 async function deleteJob(id) {

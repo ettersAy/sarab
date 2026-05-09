@@ -1,5 +1,6 @@
-export type JobStatus = "pending" | "running" | "retrying" | "completed" | "failed" | "cancelled";
+export type JobStatus = "pending" | "running" | "retrying" | "completed" | "failed" | "cancelled" | "stopped";
 export type SessionMode = "new" | "resume" | "latest";
+export type ExecutionMode = "api" | "terminal";
 
 export interface Job {
   id: string;
@@ -15,11 +16,15 @@ export interface Job {
   createdAt: string;
   startedAt: string | null;
   completedAt: string | null;
+  stoppedAt: string | null;
   logFile: string | null;
   tags: string[];
   projectId?: string;
   sessionId?: string;
   sessionMode?: SessionMode;
+  executionMode?: ExecutionMode;
+  promptFile?: string;
+  resumedFrom?: string;
 }
 
 export interface JobCreateInput {
@@ -32,6 +37,8 @@ export interface JobCreateInput {
   projectId?: string;
   sessionId?: string;
   sessionMode?: SessionMode;
+  executionMode?: ExecutionMode;
+  promptFile?: string;
 }
 
 export interface QueueStats {
@@ -40,6 +47,7 @@ export interface QueueStats {
   completed: number;
   failed: number;
   cancelled: number;
+  stopped: number;
   total: number;
 }
 

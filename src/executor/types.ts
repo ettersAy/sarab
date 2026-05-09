@@ -4,6 +4,7 @@ export interface ExecutorInput {
   timeoutMs: number;
   sessionId?: string;
   cwd?: string;
+  onOutput?: (chunk: string) => void;
 }
 
 export interface ExecutorOutput {
@@ -12,8 +13,10 @@ export interface ExecutorOutput {
   stderr: string;
   timedOut: boolean;
   capturedSessionId?: string;
+  killed?: boolean;
 }
 
 export interface Executor {
   execute(input: ExecutorInput): Promise<ExecutorOutput>;
+  kill?(): void;
 }

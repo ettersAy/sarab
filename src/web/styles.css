@@ -153,6 +153,7 @@ main {
 .stat-card.completed .stat-value { color: var(--green); }
 .stat-card.failed .stat-value { color: var(--red); }
 .stat-card.cancelled .stat-value { color: var(--text-dim); }
+.stat-card.stopped .stat-value { color: var(--orange); }
 .stat-card.total .stat-value { color: var(--text); }
 
 .recent-jobs { margin-top: 8px; }
@@ -224,6 +225,7 @@ main {
 .status-badge.completed { background: rgba(63, 185, 80, 0.15); color: var(--green); }
 .status-badge.failed { background: rgba(248, 81, 73, 0.15); color: var(--red); }
 .status-badge.cancelled { background: rgba(139, 148, 158, 0.15); color: var(--text-dim); }
+.status-badge.stopped { background: rgba(219, 109, 40, 0.15); color: var(--orange); }
 
 .job-time {
   font-size: 11px;

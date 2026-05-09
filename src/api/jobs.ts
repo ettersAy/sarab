@@ -42,7 +42,7 @@ export function createJobsRouter(jobStore: JobStore, logStore: LogStore, queueMa
 
   // Create job
   router.post("/", (req, res) => {
-    const { title, prompt, model, timeoutMs, maxRetries, tags, projectId, sessionId, sessionMode } = req.body;
+    const { title, prompt, model, timeoutMs, maxRetries, tags, projectId, sessionId, sessionMode, executionMode } = req.body;
     if (!title || typeof title !== "string" || title.trim().length === 0) {
       throw new ValidationError("Title is required");
     }
@@ -62,6 +62,7 @@ export function createJobsRouter(jobStore: JobStore, logStore: LogStore, queueMa
       projectId,
       sessionId,
       sessionMode,
+      executionMode,
     });
     res.status(201).json(job);
   });
@@ -69,6 +70,18 @@ export function createJobsRouter(jobStore: JobStore, logStore: LogStore, queueMa
   // Cancel job
   router.post("/:id/cancel", (req, res) => {
     const job = queueManager.cancelJob(req.params.id);
+    res.json(job);
+  });
+
+  // Stop running job
+  router.post("/:id/stop", (req, res) => {
+    const job = queueManager.stopJob(req.params.id);
+    res.json(job);
+  });
+
+  // Resume stopped job
+  router.post("/:id/resume", (req, res) => {
+    const job = queueManager.resumeJob(req.params.id);
     res.json(job);
   });
 

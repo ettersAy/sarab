@@ -1,16 +1,32 @@
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import type { Executor, ExecutorInput, ExecutorOutput } from "./types.js";
 import { logger } from "../logger.js";
 
 const SESSION_ID_RE = /Session ID: (cls_\w+)/;
 
 export class ClaudeExecutor implements Executor {
+  private currentProcess: ChildProcess | null = null;
+  private killed = false;
+
   constructor(
     private readonly claudeCmd: string,
     private readonly claudeFlags: string,
   ) {}
 
+  kill(): void {
+    this.killed = true;
+    if (this.currentProcess && !this.currentProcess.killed) {
+      this.currentProcess.kill("SIGTERM");
+      setTimeout(() => {
+        if (this.currentProcess && !this.currentProcess.killed) {
+          this.currentProcess.kill("SIGKILL");
+        }
+      }, 10_000);
+    }
+  }
+
   async execute(input: ExecutorInput): Promise<ExecutorOutput> {
+    this.killed = false;
     const args = [...this.claudeFlags.split(" ").filter(Boolean)];
     if (input.model) args.unshift("--model", input.model);
     if (input.sessionId) args.push("--resume", input.sessionId);
@@ -28,7 +44,7 @@ export class ClaudeExecutor implements Executor {
       let timedOut = false;
       let settled = false;
 
-      const child = spawn(this.claudeCmd, args, {
+      this.currentProcess = spawn(this.claudeCmd, args, {
         stdio: ["ignore", "pipe", "pipe"],
         env: { ...process.env },
         cwd: input.cwd,
@@ -36,9 +52,11 @@ export class ClaudeExecutor implements Executor {
 
       const timer = setTimeout(() => {
         timedOut = true;
-        child.kill("SIGTERM");
+        this.currentProcess?.kill("SIGTERM");
         setTimeout(() => {
-          if (!child.killed) child.kill("SIGKILL");
+          if (this.currentProcess && !this.currentProcess.killed) {
+            this.currentProcess.kill("SIGKILL");
+          }
         }, 10_000);
       }, input.timeoutMs);
 
@@ -46,11 +64,23 @@ export class ClaudeExecutor implements Executor {
         if (settled) return;
         settled = true;
         clearTimeout(timer);
-        resolve({ exitCode: timedOut ? 124 : exitCode, stdout, stderr, timedOut, capturedSessionId });
+        this.currentProcess = null;
+        resolve({
+          exitCode: timedOut ? 124 : this.killed ? 143 : exitCode,
+          stdout,
+          stderr,
+          timedOut,
+          capturedSessionId,
+          killed: this.killed,
+        });
       };
 
-      child.stdout?.on("data", (d: Buffer) => { stdout += d.toString(); });
-      child.stderr?.on("data", (d: Buffer) => {
+      this.currentProcess.stdout?.on("data", (d: Buffer) => {
+        const chunk = d.toString();
+        stdout += chunk;
+        input.onOutput?.(chunk);
+      });
+      this.currentProcess.stderr?.on("data", (d: Buffer) => {
         const chunk = d.toString();
         stderr += chunk;
         if (!capturedSessionId) {
@@ -58,8 +88,8 @@ export class ClaudeExecutor implements Executor {
           if (match) capturedSessionId = match[1];
         }
       });
-      child.on("close", (code) => finish(code ?? 1));
-      child.on("error", (err) => {
+      this.currentProcess.on("close", (code) => finish(code ?? 1));
+      this.currentProcess.on("error", (err) => {
         stderr += err.message;
         finish(1);
       });

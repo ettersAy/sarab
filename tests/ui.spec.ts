@@ -40,8 +40,8 @@ test("Navigation buttons highlight active view", async ({ page }) => {
 test("Dashboard shows stats cards", async ({ page }) => {
   await page.goto("/");
   const cards = page.locator(".stat-card");
-  await expect(cards).toHaveCount(6);
-  const labels = ["pending", "running", "completed", "failed", "cancelled", "total"];
+  await expect(cards).toHaveCount(7);
+  const labels = ["pending", "running", "completed", "failed", "cancelled", "stopped", "total"];
   for (const label of labels) {
     await expect(page.locator(`.stat-card.${label}`)).toBeVisible();
   }
@@ -96,7 +96,7 @@ test("Submit form validates required title", async ({ page }) => {
 test("Queue has filter buttons", async ({ page }) => {
   await page.goto("/");
   await page.click('button[data-view="queue"]');
-  const filters = ["all", "pending", "running", "completed", "failed", "cancelled"];
+  const filters = ["all", "pending", "running", "completed", "failed", "cancelled", "stopped"];
   for (const f of filters) {
     await expect(page.locator(`.filter-btn[data-filter="${f}"]`)).toBeVisible();
   }
