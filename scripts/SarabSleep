@@ -1,0 +1,41 @@
+#!/usr/bin/env bash
+# ── SarabSleep — Stop the SARAB dev server ───────────────────────
+set -euo pipefail
+
+PORT="${PORT:-3457}"
+PID_FILE="/tmp/sarab.pid"
+PID=""
+
+# Find the server PID
+if [[ -f "$PID_FILE" ]]; then
+  PID=$(cat "$PID_FILE")
+  if ! kill -0 "$PID" 2>/dev/null; then
+    rm -f "$PID_FILE"
+    PID=""
+  fi
+fi
+
+if [[ -z "$PID" ]]; then
+  PID=$(lsof -ti :"$PORT" 2>/dev/null | head -1 || echo "")
+fi
+
+if [[ -z "$PID" ]]; then
+  echo "No server running on port $PORT."
+  exit 0
+fi
+
+echo "Server found on port $PORT (PID $PID)."
+read -r -p "Stop it? (y/n) " answer
+if [[ "$answer" != "y" && "$answer" != "Y" ]]; then
+  echo "Leaving it running."
+  exit 0
+fi
+
+kill "$PID" 2>/dev/null || true
+sleep 1
+if kill -0 "$PID" 2>/dev/null; then
+  echo "Not dying, force-killing..."
+  kill -9 "$PID" 2>/dev/null || true
+fi
+rm -f "$PID_FILE"
+echo "Stopped."

@@ -10,7 +10,10 @@
     "start": "node dist/server.js",
     "check": "tsc --noEmit",
     "test": "npx playwright test",
-    "smoke": "./scripts/smoke-test.sh"
+    "smoke": "./scripts/smoke-test.sh",
+    "start-server": "./scripts/SarabWakeUp",
+    "stop-server": "./scripts/SarabSleep",
+    "health": "./scripts/sarabHealth"
   },
   "dependencies": {
     "express": "^4.21.0",

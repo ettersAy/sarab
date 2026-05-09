@@ -1,0 +1,44 @@
+#!/usr/bin/env bash
+# ── SarabWakeUp — Start the SARAB dev server ─────────────────────
+set -euo pipefail
+
+SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
+PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
+PORT="${PORT:-3457}"
+PID_FILE="/tmp/sarab.pid"
+
+cd "$PROJECT_DIR"
+
+# Check if already running
+if lsof -ti :"$PORT" > /dev/null 2>&1; then
+  PID=$(lsof -ti :"$PORT" | head -1)
+  echo "Server already running on port $PORT (PID $PID)."
+  read -r -p "Restart? (y/n) " answer
+  if [[ "$answer" != "y" && "$answer" != "Y" ]]; then
+    echo "Leaving it alone."
+    exit 0
+  fi
+  echo "Stopping..."
+  kill "$PID" 2>/dev/null || true
+  sleep 1
+  kill -9 "$PID" 2>/dev/null || true
+  sleep 0.5
+fi
+
+# Start server in background
+echo "Starting SARAB on port $PORT..."
+npx tsx src/server.ts &
+SERVER_PID=$!
+echo "$SERVER_PID" > "$PID_FILE"
+
+# Wait for it to be ready
+for i in $(seq 1 20); do
+  if curl -s "http://localhost:$PORT/health" > /dev/null 2>&1; then
+    echo "Ready — http://localhost:$PORT (PID $SERVER_PID)"
+    exit 0
+  fi
+  sleep 0.3
+done
+
+echo "Server started but not responding yet. Check http://localhost:$PORT"
+exit 0

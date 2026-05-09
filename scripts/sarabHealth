@@ -1,0 +1,45 @@
+#!/usr/bin/env bash
+# ── sarabHealth — Check the SARAB server status ──────────────────
+set -euo pipefail
+
+PORT="${PORT:-3457}"
+BASE="http://localhost:${PORT}"
+
+# Check if port is occupied
+if ! lsof -ti :"$PORT" > /dev/null 2>&1; then
+  echo "SARAB: down (nothing on port $PORT)"
+  exit 1
+fi
+
+# Try health endpoint
+HEALTH=$(curl -s --max-time 3 "$BASE/health" 2>/dev/null || echo "")
+if [[ -z "$HEALTH" ]]; then
+  echo "SARAB: unresponsive (port $PORT in use but not replying)"
+  exit 1
+fi
+
+STATUS=$(echo "$HEALTH" | grep -o '"status":"[^"]*"' | cut -d'"' -f4)
+UPTIME=$(echo "$HEALTH" | grep -o '"uptime":[0-9.]*' | cut -d':' -f2)
+CLAUDE=$(echo "$HEALTH" | grep -o '"claude":"[^"]*"' | cut -d'"' -f4)
+
+# Format uptime nicely
+UPTIME_S=$(printf "%.0f" "$UPTIME" 2>/dev/null || echo "$UPTIME")
+if [[ "$UPTIME_S" -ge 3600 ]]; then
+  H=$((UPTIME_S / 3600))
+  M=$(((UPTIME_S % 3600) / 60))
+  UPTIME_FMT="${H}h ${M}m"
+elif [[ "$UPTIME_S" -ge 60 ]]; then
+  M=$((UPTIME_S / 60))
+  S=$((UPTIME_S % 60))
+  UPTIME_FMT="${M}m ${S}s"
+else
+  UPTIME_FMT="${UPTIME_S}s"
+fi
+
+echo "SARAB: $STATUS"
+echo "  Port:    $PORT"
+echo "  Uptime:  $UPTIME_FMT"
+echo "  Claude:  $CLAUDE"
+echo "  URL:     $BASE"
+
+exit 0
