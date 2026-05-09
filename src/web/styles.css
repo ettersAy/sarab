@@ -535,3 +535,95 @@ main {
 .project-card-actions { display: flex; gap: 6px; }
 
 .project-meta { display: flex; gap: 12px; flex-wrap: wrap; }
+
+/* ── Responsive (mobile) ──────────────────────────────── */
+
+@media (max-width: 768px) {
+  .topbar {
+    flex-wrap: wrap;
+    height: auto;
+    padding: 8px 12px;
+    gap: 8px;
+  }
+
+  .topbar-nav {
+    order: 3;
+    width: 100%;
+    justify-content: center;
+  }
+
+  .nav-btn {
+    padding: 4px 10px;
+    font-size: 12px;
+  }
+
+  main {
+    padding: 12px 10px;
+  }
+
+  .stats-grid {
+    grid-template-columns: repeat(3, 1fr);
+    gap: 6px;
+  }
+
+  .stat-card {
+    padding: 10px;
+  }
+
+  .stat-card .stat-value {
+    font-size: 22px;
+  }
+
+  .form-row {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+
+  .job-table {
+    font-size: 11px;
+  }
+
+  .job-table th:nth-child(4),
+  .job-table td:nth-child(4) {
+    display: none;
+  }
+
+  .job-time {
+    font-size: 10px;
+  }
+
+  .project-card {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+
+  .project-card-actions {
+    width: 100%;
+    justify-content: flex-end;
+  }
+
+  .modal-content {
+    width: 95%;
+    max-height: 90vh;
+  }
+
+  .form-container {
+    max-width: 100%;
+  }
+}
+
+@media (max-width: 480px) {
+  .stats-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+
+  .job-table th:nth-child(3),
+  .job-table td:nth-child(3) {
+    display: none;
+  }
+
+  .topbar-brand h1 {
+    font-size: 14px;
+  }
+}

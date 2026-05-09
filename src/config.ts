@@ -6,6 +6,7 @@ export interface AppConfig {
   defaultTimeoutMs: number;
   defaultMaxRetries: number;
   pollIntervalMs: number;
+  concurrency: number;
 }
 
 export function loadConfig(): AppConfig {
@@ -17,5 +18,6 @@ export function loadConfig(): AppConfig {
     defaultTimeoutMs: parseInt(process.env.SARAB_TIMEOUT || "600000", 10),
     defaultMaxRetries: parseInt(process.env.SARAB_MAX_RETRIES || "2", 10),
     pollIntervalMs: parseInt(process.env.SARAB_POLL_INTERVAL || "5000", 10),
+    concurrency: parseInt(process.env.SARAB_CONCURRENCY || "1", 10),
   };
 }

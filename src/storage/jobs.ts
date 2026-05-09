@@ -7,6 +7,7 @@ import { NotFoundError } from "../errors.js";
 
 export class JobStore {
   private filePath: string;
+  private cache = new Map<string, Job>();
 
   constructor(
     dataDir: string,
@@ -15,17 +16,27 @@ export class JobStore {
   ) {
     mkdirSync(dataDir, { recursive: true });
     this.filePath = join(dataDir, "jobs.jsonl");
+    this.loadCache();
+  }
+
+  private loadCache(): void {
+    if (!existsSync(this.filePath)) return;
+    const raw = readFileSync(this.filePath, "utf-8").trim();
+    if (!raw) return;
+    for (const line of raw.split("\n")) {
+      try {
+        const job = JSON.parse(line) as Job;
+        this.cache.set(job.id, job);
+      } catch { /* skip malformed lines */ }
+    }
   }
 
   list(): Job[] {
-    if (!existsSync(this.filePath)) return [];
-    const raw = readFileSync(this.filePath, "utf-8").trim();
-    if (!raw) return [];
-    return raw.split("\n").map((line) => JSON.parse(line) as Job);
+    return Array.from(this.cache.values());
   }
 
   get(id: string): Job | undefined {
-    return this.list().find((j) => j.id === id);
+    return this.cache.get(id);
   }
 
   create(input: JobCreateInput): Job {
@@ -49,47 +60,54 @@ export class JobStore {
       sessionId: input.sessionId,
       sessionMode: input.sessionMode,
     };
-    this.append(job);
+    this.cache.set(job.id, job);
+    this.persistOne(job);
     logger.info(`Job created: ${job.id} — "${job.title}"`);
     return job;
   }
 
   update(id: string, patch: Partial<Job>): Job {
-    const jobs = this.list();
-    const idx = jobs.findIndex((j) => j.id === id);
-    if (idx === -1) throw new NotFoundError("Job", id);
-    jobs[idx] = { ...jobs[idx], ...patch };
-    this.writeAll(jobs);
-    return jobs[idx];
+    const existing = this.cache.get(id);
+    if (!existing) throw new NotFoundError("Job", id);
+    const updated = { ...existing, ...patch };
+    this.cache.set(id, updated);
+    this.persistAll();
+    return updated;
   }
 
   delete(id: string): void {
-    const jobs = this.list().filter((j) => j.id !== id);
-    this.writeAll(jobs);
+    this.cache.delete(id);
+    this.persistAll();
   }
 
   stats(): QueueStats {
-    const jobs = this.list();
-    return {
-      pending: jobs.filter((j) => j.status === "pending").length,
-      running: jobs.filter((j) => j.status === "running").length,
-      completed: jobs.filter((j) => j.status === "completed").length,
-      failed: jobs.filter((j) => j.status === "failed").length,
-      cancelled: jobs.filter((j) => j.status === "cancelled").length,
-      total: jobs.length,
-    };
+    let pending = 0, running = 0, completed = 0, failed = 0, cancelled = 0;
+    for (const j of this.cache.values()) {
+      switch (j.status) {
+        case "pending": pending++; break;
+        case "running": running++; break;
+        case "completed": completed++; break;
+        case "failed": failed++; break;
+        case "cancelled": cancelled++; break;
+      }
+    }
+    return { pending, running, completed, failed, cancelled, total: this.cache.size };
   }
 
   getNextPending(): Job | undefined {
-    return this.list().find((j) => j.status === "pending");
+    for (const j of this.cache.values()) {
+      if (j.status === "pending") return j;
+    }
+    return undefined;
   }
 
-  private append(job: Job): void {
+  private persistOne(job: Job): void {
     const line = JSON.stringify(job) + "\n";
     writeFileSync(this.filePath, line, { flag: "a" });
   }
 
-  private writeAll(jobs: Job[]): void {
+  private persistAll(): void {
+    const jobs = Array.from(this.cache.values());
     const content = jobs.map((j) => JSON.stringify(j)).join("\n") + (jobs.length ? "\n" : "");
     const tmp = `${this.filePath}.${uuid().slice(0, 8)}.tmp`;
     writeFileSync(tmp, content);

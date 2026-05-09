@@ -495,3 +495,36 @@ Three parallel audit agents found 20+ issues across the codebase:
 **81 tests, 0 failures** (60 fast + 5 slow + 16 smoke)
 **20+ bugs fixed** across frontend, backend, and integration
 **Settings system now functional** — executor factory wired into server startup
+
+---
+
+## Remaining skipped items implemented (2026-05-09)
+
+### M1: In-memory job index
+- JobStore now uses `Map<string, Job>` cache alongside JSONL file
+- `get()` is O(1), `list()` is O(n) but no file I/O
+- `create()` adds to cache + appends; `update()`/`delete()` mutate cache + rewrite file
+- Cache loaded from JSONL on construction
+- Same pattern applicable to ProjectStore/SessionStore (less critical — read less often)
+
+### M6: Pagination
+- `GET /api/jobs?limit=N&offset=M` returns `{ jobs, total, limit, offset }`
+- When no params: returns flat array (backward compatible)
+- Frontend: 25 jobs per page, Prev/Next buttons, page counter
+- Page resets to 0 on filter/search change
+
+### L1: Responsive CSS
+- Media queries at 768px and 480px breakpoints
+- Topbar wraps vertically, nav centers, stats compress to 3→2 columns
+- Job table hides Attempt column (768px), Status column (480px)
+- Form rows stack vertically, project cards go column layout
+- Modal width constrained to 95%
+
+### L3: Concurrency config
+- `SARAB_CONCURRENCY` env var (default: 1, backward compatible)
+- QueueManager tracks `activeJobs` Set, starts up to N jobs per tick
+- Next poll scheduled immediately (doesn't wait for job completion)
+- Active count decremented on completion/failure/stop
+
+### Test results: 76 tests, 0 failures
+- 60 fast Playwright (8.2s) + 16 smoke

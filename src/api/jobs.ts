@@ -15,12 +15,17 @@ const VALID_MODELS = new Set([
 export function createJobsRouter(jobStore: JobStore, logStore: LogStore, queueManager: QueueManager): Router {
   const router = Router();
 
-  // List all jobs
-  router.get("/", (_req, res) => {
-    const jobs = jobStore.list();
-    // Sort: newest first
+  // List all jobs (with optional pagination)
+  router.get("/", (req, res) => {
+    let jobs = jobStore.list();
     jobs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-    res.json(jobs);
+    const total = jobs.length;
+    const limit = parseInt(req.query.limit as string) || 0;
+    const offset = parseInt(req.query.offset as string) || 0;
+    if (limit > 0) {
+      jobs = jobs.slice(offset, offset + limit);
+    }
+    res.json(limit > 0 ? { jobs, total, limit, offset } : jobs);
   });
 
   // Get stats

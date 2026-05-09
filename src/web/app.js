@@ -17,6 +17,8 @@ let stats = { pending: 0, running: 0, completed: 0, failed: 0, cancelled: 0, tot
 let queueFilter = "all";
 let queueSearch = "";
 let queueRunning = true;
+let queuePage = 0;
+const PAGE_SIZE = 25;
 
 // ── DOM refs ────────────────────────────────────────────────────────
 const $main = document.getElementById("main");
@@ -341,12 +343,23 @@ function renderQueue() {
     );
   }
 
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  if (queuePage >= totalPages) queuePage = Math.max(0, totalPages - 1);
+  const paged = filtered.slice(queuePage * PAGE_SIZE, (queuePage + 1) * PAGE_SIZE);
+
   const filterBtns = ["all", "pending", "running", "completed", "failed", "cancelled"]
     .map(
       (f) =>
         `<button class="filter-btn${queueFilter === f ? " active" : ""}" data-filter="${f}">${f}</button>`
     )
     .join("");
+
+  const paginationHtml = filtered.length > PAGE_SIZE ? `
+    <div style="display:flex;align-items:center;justify-content:center;gap:8px;margin-top:12px;font-size:12px;color:var(--text-dim)">
+      <button class="btn btn-sm" id="btn-prev-page" ${queuePage === 0 ? "disabled" : ""}>Prev</button>
+      <span>Page ${queuePage + 1} of ${totalPages} (${filtered.length} jobs)</span>
+      <button class="btn btn-sm" id="btn-next-page" ${queuePage >= totalPages - 1 ? "disabled" : ""}>Next</button>
+    </div>` : "";
 
   $main.innerHTML = `
     <div class="view active" id="view-queue">
@@ -362,18 +375,27 @@ function renderQueue() {
           style="width:100%;background:var(--bg-secondary);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-size:13px;font-family:var(--font)">
       </div>
       <div class="queue-filter">${filterBtns}</div>
-      ${renderJobTable(filtered)}
+      ${renderJobTable(paged)}
+      ${paginationHtml}
     </div>`;
 
   document.getElementById("btn-refresh")?.addEventListener("click", loadJobs);
   document.getElementById("btn-pause")?.addEventListener("click", toggleQueue);
   document.getElementById("queue-search")?.addEventListener("input", (e) => {
     queueSearch = e.target.value;
+    queuePage = 0;
     renderQueue();
+  });
+  document.getElementById("btn-prev-page")?.addEventListener("click", () => {
+    if (queuePage > 0) { queuePage--; renderQueue(); }
+  });
+  document.getElementById("btn-next-page")?.addEventListener("click", () => {
+    if (queuePage < totalPages - 1) { queuePage++; renderQueue(); }
   });
   document.querySelectorAll(".filter-btn").forEach((btn) => {
     btn.addEventListener("click", () => {
       queueFilter = btn.dataset.filter;
+      queuePage = 0;
       renderQueue();
     });
   });

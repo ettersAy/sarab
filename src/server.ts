@@ -46,7 +46,7 @@ const promptExecutor: Executor | undefined = piProvider
   : executor;
 
 // Queue
-const queueManager = new QueueManager(jobStore, logStore, executor, config.pollIntervalMs, sessionStore, projectStore);
+const queueManager = new QueueManager(jobStore, logStore, executor, config.pollIntervalMs, sessionStore, projectStore, config.concurrency);
 
 // SSE
 const sseManager = new SSEManager(queueManager, jobStore);

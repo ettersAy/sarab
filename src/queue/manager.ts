@@ -20,6 +20,7 @@ export class QueueManager extends EventEmitter {
   private running = false;
   private abortController: AbortController | null = null;
   private pollTimer: ReturnType<typeof setTimeout> | null = null;
+  private activeJobs = new Set<string>();
 
   constructor(
     private readonly jobStore: JobStore,
@@ -28,6 +29,7 @@ export class QueueManager extends EventEmitter {
     private readonly pollIntervalMs: number = 5000,
     private readonly sessionStore?: SessionStore,
     private readonly projectStore?: ProjectStore,
+    private readonly concurrency: number = 1,
   ) {
     super();
   }
@@ -105,13 +107,22 @@ export class QueueManager extends EventEmitter {
     if (!this.running) return;
     this.emit("queue-tick", { type: "queue-tick" });
 
-    const job = this.jobStore.getNextPending();
-    if (!job) {
+    // Start as many pending jobs as concurrency allows
+    const capacity = this.concurrency - this.activeJobs.size;
+    if (capacity <= 0) {
       this.scheduleNext();
       return;
     }
 
-    await this.processJob(job);
+    const started: Promise<void>[] = [];
+    for (let i = 0; i < capacity; i++) {
+      const job = this.jobStore.getNextPending();
+      if (!job) break;
+      this.activeJobs.add(job.id);
+      started.push(this.processJob(job));
+    }
+
+    // Schedule next poll regardless of job completion
     this.scheduleNext();
   }
 
@@ -223,6 +234,7 @@ export class QueueManager extends EventEmitter {
         const completedJob = this.jobStore.get(job.id)!;
         this.emit("job-completed", { type: "job-completed", job: completedJob });
         logger.info(`Job ${job.id} completed`);
+        this.activeJobs.delete(job.id);
         return;
       }
 
@@ -230,6 +242,7 @@ export class QueueManager extends EventEmitter {
 
       if (!this.running) {
         this.jobStore.update(job.id, { status: "failed", error: "Queue stopped", exitCode: -1, completedAt: new Date().toISOString(), logFile: this.logStore.getPath(job.id) });
+        this.activeJobs.delete(job.id);
         return;
       }
     }
@@ -245,6 +258,7 @@ export class QueueManager extends EventEmitter {
     const failedJob = this.jobStore.get(job.id)!;
     this.emit("job-failed", { type: "job-failed", job: failedJob });
     logger.error(`Job ${job.id} failed after ${maxAttempts} attempts`);
+    this.activeJobs.delete(job.id);
   }
 }
 
