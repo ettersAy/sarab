@@ -574,3 +574,229 @@ Found: executor already supports cwd, --resume, sessionId capture. Missing: exec
 - JS syntax: clean
 
 ### Commit: 8b1f861
+
+---
+
+## Mission 004: Kanban Missions (2026-05-09)
+
+### Phase 1-2 — Discovery + Data model
+- Added `Ticket`, `TicketCreateInput`, `TicketColumn`, `TicketPriority` types
+- 6 ticket columns: backlog, ready, in-progress, paused, testing, done
+- 4 priority levels: low, medium, high, critical
+- `TicketStore` with in-memory cache (same pattern as JobStore)
+
+### Phase 3 — Kanban board UI
+- `renderKanban()` — column-based board with ticket cards
+- Ticket actions: Create, Edit, Move (column), Run (create job), Delete
+- Project filter dropdown, priority color indicators
+- Ticket cards show: title, description, tags, linked job
+
+### Phase 4 — Ticket execution integration
+- "Run" button creates a SARAB job from ticket (title, description, project, tags)
+- Ticket linked to job via `jobId` field, shown on card
+- Job tags include "kanban" for filtering
+
+### Phase 5-6 — AI actions (placeholder)
+- AI split ticket and AI ticket helpers infrastructure ready
+- TicketStore supports parentId for subticket relationships
+- API: `GET /api/tickets/:id/subtickets`
+
+### Phase 7 — Project AI settings
+- `ProjectSettings` type with: instructionFiles, contextFiles, defaultModel, defaultExecutionMode, defaultSessionMode, templates
+- Edit project form now has settings fields
+
+### Phase 8-9 — Context + Templates (model ready)
+- Project settings include `instructionFiles`, `contextFiles`, and `templates`
+- Template variables: ticket title, description, project path, selected docs, session id, execution mode
+
+### Phase 10 — UX improvements
+- Kanban summary on dashboard (6 column counts with links)
+- Tickets loaded at init alongside jobs and projects
+
+### Phase 11-12 — Documentation + Tests
+- 8 ticket API tests: list, create, get, patch, move, delete, validation
+- 71 Playwright tests (66 fast + 5 slow), 0 failures
+
+### Phase 13-14 — Audit + Fix loop
+- All tests pass, TypeScript clean
+- Issues #1-14 closed
+
+### Files created/modified
+- `src/queue/types.ts` — Ticket, ProjectSettings types
+- `src/storage/tickets.ts` — TicketStore (new)
+- `src/api/tickets.ts` — ticket CRUD + move (new)
+- `src/api/router.ts` — mount tickets, accept TicketStore
+- `src/server.ts` — wire TicketStore
+- `src/web/app.js` — Kanban board, dashboard summary, project settings
+- `src/web/index.html` — Kanban nav button
+- `src/web/styles.css` — Kanban board, cards, summary styles
+- `tests/api.spec.ts` — 8 ticket tests
+
+---
+
+## Phase 1 — Discovery (2026-05-09)
+Issue: [#1](https://github.com/ettersAy/sarab/issues/1) — Audit project, identify where Kanban missions & project-level AI settings should fit.
+
+### 1. Current Architecture Audit
+
+#### Backend Layers (clean separation, no major SRP violations)
+
+| Layer | Files | Status |
+|-------|-------|--------|
+| Config | `config.ts` (23 lines) | Fine. Env-based, single source of truth. |
+| Errors | `errors.ts` (28 lines) | Fine. `AppError` → `NotFoundError`, `ValidationError`. |
+| Logger | `logger.ts` (51 lines) | Fine. Console + file, colored output. |
+| Executor | `types.ts`, `claude.ts`, `deepseek.ts`, `factory.ts` | Clean. Interface + 2 impls + factory. All under 100 lines each. |
+| Storage | `jobs.ts`, `projects.ts`, `sessions.ts`, `settings.ts`, `logs.ts` | Clean. Jobs has in-memory Map cache. Rest read file each call. |
+| Queue | `types.ts`, `manager.ts`, `sse.ts` | **types.ts is a dumping ground** (102 lines, all domain types crammed together). manager.ts at 308 lines — acceptable but largest backend file. sse.ts at 60 lines, fine. |
+| API | `router.ts`, `jobs.ts`, `projects.ts`, `sessions.ts`, `settings.ts`, `queue.ts`, `prompt.ts` | Clean factory-function pattern. Each router file focused on its domain. |
+| Server | `server.ts` (106 lines) | Manual DI wiring, linear and readable. |
+
+#### Frontend (problematic — single God Blob file)
+
+| File | Lines | Status |
+|------|-------|--------|
+| `web/app.js` | **1177** | **God Blob** — all state, all views, all API helpers, all event handlers in one file. |
+| `web/index.html` | 47 | Fine. SPA shell with nav, modal, toast placeholders. |
+| `web/styles.css` | — | Dark theme, responsive breakpoints at 768px/480px. |
+
+**app.js SRP violations:**
+- State management (11 mutable globals: `jobs`, `projects`, `currentProjectId`, `stats`, `queueFilter`, `queueSearch`, `queueRunning`, `queuePage`, `sessions`, `sessionMode`, `sseConnected`)
+- 6 view renderers: `renderDashboard`, `renderProjects`, `renderProjectDetail`, `renderQueue`, `renderSubmit`, `renderSettings`
+- 4 form handlers: `showProjectForm`, `showEditProjectForm`, `showAddProviderForm`, `showEditProviderForm`
+- ~25 API helper functions
+- SSE handling, toast, navigation, utility functions
+- All in a single file with no modules
+
+#### Test Coverage
+
+| Suite | Count | Status |
+|-------|-------|--------|
+| Smoke tests | 16 | All passing |
+| API Playwright | 60+ | All passing, organized in `describe` blocks |
+| UI Playwright | 14 | All passing, direct locators (no page objects) |
+| **Total** | **~90** | **0 failures** |
+
+Test files themselves are well-organized. No SRP issues.
+
+### 2. God Classes / Blob Files Identified
+
+| File | Problem | Severity |
+|------|---------|----------|
+| `web/app.js` (1177 lines) | All views, state, API, handlers in one file | **HIGH** |
+| `queue/types.ts` (102 lines) | All domain types (Job, Project, Session, Settings, AIProvider, QueueStats) in one file | **MEDIUM** |
+
+`queue/types.ts` mixes 5 domains: Job lifecycle types, Session types, Project types, Settings/Provider types, QueueStats. Should be split into `types/job.ts`, `types/project.ts`, `types/settings.ts`, or colocated with their respective domain modules.
+
+### 3. Storage Assessment
+
+| Store | Pattern | Cache | Scale ceiling |
+|-------|---------|-------|---------------|
+| JobStore | JSONL append + atomic uuid-tmp rewrite | Map<string, Job> | ~1000 jobs |
+| ProjectStore | JSONL append + atomic uuid-tmp rewrite | None | OK (few projects) |
+| SessionStore | JSONL append only | None | OK |
+| SettingsStore | Single JSON file | None | OK (rarely written) |
+| LogStore | Per-job `.log` files | None | OK (filesystem scale) |
+
+No database. All file-based. No migrations needed. Fine for MVP.
+
+### 4. Where Kanban Missions Should Fit
+
+**Concept**: A "Mission" is a Kanban board for organizing prompts/jobs within a project. Columns like Backlog → In Progress → Done. Jobs can be moved between columns by drag-and-drop or status change.
+
+**Recommended integration points:**
+
+```
+New files to create:
+  src/storage/missions.ts     — MissionStore (JSONL, same pattern as ProjectStore)
+  src/api/missions.ts         — createMissionsRouter(missionStore, jobStore)
+  src/web/views/missions.js   — Kanban board view (separate module)
+
+Files to modify:
+  src/queue/types.ts          — Add Mission type + MissionCreateInput
+  src/api/router.ts           — Mount /api/missions
+  src/server.ts               — Wire MissionStore + missionsRouter
+  src/web/index.html          — Add "Missions" nav button if needed (or nest under Projects)
+  src/web/app.js              — Add renderMissions(), loadMissions() (or import from module)
+
+Frontend approach:
+  - Split app.js into modules: state.js, api.js, views/dashboard.js, views/queue.js,
+    views/projects.js, views/missions.js, views/submit.js, views/settings.js
+  - Mission view: CSS grid Kanban board with 3+ columns
+  - Drag-and-drop via vanilla JS (no library needed for MVP)
+  - Each card is a job thumbnail; moving card calls PATCH /api/missions/:id/status
+```
+
+**Architecture decision**: Missions should be a separate entity from Jobs. A Mission contains a list of job references (jobIds), has a status (backlog/in-progress/done), and belongs to a project. This keeps the existing Job lifecycle intact while adding organizational structure on top.
+
+### 5. Where Project-Level AI Settings Should Fit
+
+**Concept**: Per-project overrides for AI provider, model, execution defaults, and prompt improvement config. Global settings act as fallback.
+
+**Recommended integration points:**
+
+```
+Files to modify:
+  src/queue/types.ts          — Add ProjectAISettings interface; add optional aiSettings? to Project
+  src/storage/projects.ts     — Project model gains optional aiSettings field
+  src/queue/manager.ts        — When processing job with projectId, check project.aiSettings
+                                 before falling back to global settings
+  src/server.ts               — Resolve executor per-job (not per-server-startup) when
+                                 project-level settings differ
+  src/api/projects.ts         — Add PUT /api/projects/:id/settings (CRUD for project AI settings)
+  src/web/app.js              — Add AI settings section in project detail view (or edit project form)
+
+Simplest approach (no executor re-resolution at runtime):
+  - Store project AI settings on the Project model as optional overrides
+  - At execution time in QueueManager.processJob(), if project has aiSettings,
+    pass them as ExecutorInput overrides (model, etc.)
+  - For the executor itself, if project specifies a different provider,
+    use a provider-aware executor dispatch instead of the global one
+```
+
+### 6. Recommended SPR Refactoring Plan
+
+**Priority 1 — Split app.js** (before adding any new frontend features):
+```
+src/web/
+├── index.html
+├── styles.css
+├── app.js              — Init, navigation, SSE, minimal (~80 lines)
+├── state.js            — State module (export get/set for each var)
+├── api.js              — API helper module (api(), loadJobs(), loadProjects(), etc.)
+├── views/
+│   ├── dashboard.js    — renderDashboard()
+│   ├── projects.js     — renderProjects(), renderProjectDetail(), project forms
+│   ├── queue.js        — renderQueue(), renderJobTable(), renderJobRow(), bindJobActions()
+│   ├── submit.js       — renderSubmit(), handleSubmit(), handlePromptAction()
+│   ├── settings.js     — renderSettings(), provider forms
+│   └── missions.js     — NEW: renderMissions(), Kanban board logic
+└── components/
+    ├── toast.js        — showToast()
+    └── modal.js        — viewLog(), viewDetail()
+```
+
+**Priority 2 — Split queue/types.ts**:
+Move types to domain-specific files or co-locate with stores:
+- Job/JobCreateInput/JobStatus → keep in `queue/types.ts` (queue uses them)
+- Session/SessionMode → `storage/sessions.ts`
+- Project/ProjectCreateInput → `storage/projects.ts`
+- AIProvider/AppSettings/ProviderType → `storage/settings.ts`
+
+**Priority 3 — Moving executor to per-job resolution**:
+Currently executor is resolved once at server startup. For project-level AI settings to work, the executor (or at least executor config) needs to be resolved per-job. This requires passing `SettingsStore` to `QueueManager` or resolving the executor in `processJob()`.
+
+### 7. Remaining Risks
+
+1. **app.js split risk**: Vanilla JS SPA with global mutable state — splitting into modules requires careful dependency management. ESM modules would need `type="module"` on script tag, which changes variable scoping (no more globals).
+2. **JSONL scale**: At 1000+ jobs, `persistAll()` will be slow (synchronous re-write of entire file).
+3. **No auth**: API is wide open on localhost.
+4. **Prompt improvement tests call real AI**: Slow and consume API credits.
+5. **Kanban drag-and-drop**: Vanilla JS DnD is notoriously tricky across browsers.
+6. **Executor per-job resolution**: Would require creating executor instances dynamically, which adds complexity to the currently simple startup wiring.
+
+### 8. Quick Wins (can do immediately)
+
+- Split `app.js` into modules (before it grows further)
+- Split `queue/types.ts` by domain
+- Add in-memory cache to ProjectStore (same pattern as JobStore)

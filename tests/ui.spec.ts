@@ -4,7 +4,7 @@ import { test, expect } from "@playwright/test";
 test("Dashboard is the default view", async ({ page }) => {
   await page.goto("/");
   await expect(page.locator(".stats-grid")).toBeVisible();
-  await expect(page.locator(".recent-jobs")).toBeVisible();
+  await expect(page.locator(".recent-jobs").first()).toBeVisible();
 });
 
 test("Queue view loads via navigation", async ({ page }) => {

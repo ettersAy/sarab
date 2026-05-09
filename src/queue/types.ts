@@ -60,17 +60,34 @@ export interface Session {
   createdAt: string;
 }
 
+export interface ProjectSettings {
+  instructionFiles?: string[];
+  contextFiles?: string[];
+  defaultModel?: string;
+  defaultExecutionMode?: ExecutionMode;
+  defaultSessionMode?: SessionMode;
+  templates?: {
+    reformulate?: string;
+    ticketSplit?: string;
+    implementation?: string;
+    test?: string;
+    reflection?: string;
+  };
+}
+
 export interface Project {
   id: string;
   name: string;
   rootPath: string;
   createdAt: string;
   updatedAt: string;
+  settings?: ProjectSettings;
 }
 
 export interface ProjectCreateInput {
   name: string;
   rootPath: string;
+  settings?: ProjectSettings;
 }
 
 export type ProviderType = "claude-cli" | "openai-compatible";
@@ -100,3 +117,39 @@ export interface AppSettings {
     model: string;
   };
 }
+
+// ── Kanban Tickets ────────────────────────────────────────────
+
+export type TicketColumn = "backlog" | "ready" | "in-progress" | "paused" | "testing" | "done";
+export type TicketPriority = "low" | "medium" | "high" | "critical";
+
+export interface Ticket {
+  id: string;
+  title: string;
+  description: string;
+  column: TicketColumn;
+  priority: TicketPriority;
+  projectId?: string;
+  jobId?: string;
+  sessionId?: string;
+  parentId?: string;
+  tags: string[];
+  createdAt: string;
+  updatedAt: string;
+  startedAt: string | null;
+  pausedAt: string | null;
+  doneAt: string | null;
+}
+
+export interface TicketCreateInput {
+  title: string;
+  description?: string;
+  column?: TicketColumn;
+  priority?: TicketPriority;
+  projectId?: string;
+  parentId?: string;
+  tags?: string[];
+}
+
+export const TICKET_COLUMNS: TicketColumn[] = ["backlog", "ready", "in-progress", "paused", "testing", "done"];
+export const TICKET_PRIORITIES: TicketPriority[] = ["low", "medium", "high", "critical"];

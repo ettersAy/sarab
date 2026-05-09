@@ -4,6 +4,7 @@ import type { LogStore } from "../storage/logs.js";
 import type { ProjectStore } from "../storage/projects.js";
 import type { SessionStore } from "../storage/sessions.js";
 import type { SettingsStore } from "../storage/settings.js";
+import type { TicketStore } from "../storage/tickets.js";
 import type { QueueManager } from "../queue/manager.js";
 import type { Executor } from "../executor/types.js";
 import { createJobsRouter } from "./jobs.js";
@@ -12,6 +13,7 @@ import { createPromptRouter } from "./prompt.js";
 import { createSessionsRouter } from "./sessions.js";
 import { createProjectsRouter } from "./projects.js";
 import { createSettingsRouter } from "./settings.js";
+import { createTicketsRouter } from "./tickets.js";
 
 export function createApiRouter(
   jobStore: JobStore,
@@ -21,6 +23,7 @@ export function createApiRouter(
   projectStore: ProjectStore,
   sessionStore: SessionStore,
   settingsStore: SettingsStore,
+  ticketStore: TicketStore,
   promptExecutor?: Executor,
 ): Router {
   const router = Router();
@@ -31,6 +34,7 @@ export function createApiRouter(
   router.use("/sessions", createSessionsRouter(sessionStore));
   router.use("/projects", createProjectsRouter(projectStore, jobStore, sessionStore));
   router.use("/settings", createSettingsRouter(settingsStore));
+  router.use("/tickets", createTicketsRouter(ticketStore));
 
   return router;
 }

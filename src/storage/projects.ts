@@ -45,6 +45,7 @@ export class ProjectStore {
       rootPath: input.rootPath.trim(),
       createdAt: now,
       updatedAt: now,
+      settings: input.settings,
     };
     this.append(project);
     logger.info(`Project created: ${project.id} — "${project.name}"`);

@@ -530,3 +530,88 @@ test.describe("Execution modes", () => {
     await request.delete(`/api/jobs/${job.id}`);
   });
 });
+
+// ── Tickets (Kanban) ─────────────────────────────────────────
+test.describe("Tickets", () => {
+  let ticketId: string;
+
+  test.afterEach(async ({ request }) => {
+    if (ticketId) {
+      try { await request.delete(`/api/tickets/${ticketId}`); } catch (_) {}
+    }
+  });
+
+  test("list returns empty initially", async ({ request }) => {
+    const res = await request.get("/api/tickets");
+    expect(res.status()).toBe(200);
+    expect(await res.json()).toEqual([]);
+  });
+
+  test("create returns 201", async ({ request }) => {
+    const res = await request.post("/api/tickets", {
+      data: { title: "Test ticket", priority: "high" },
+    });
+    expect(res.status()).toBe(201);
+    const t = await res.json();
+    expect(t.title).toBe("Test ticket");
+    expect(t.column).toBe("backlog");
+    expect(t.priority).toBe("high");
+    ticketId = t.id;
+  });
+
+  test("validates title required", async ({ request }) => {
+    const res = await request.post("/api/tickets", {
+      data: { title: "" },
+    });
+    expect(res.status()).toBe(400);
+  });
+
+  test("validates column", async ({ request }) => {
+    const res = await request.post("/api/tickets", {
+      data: { title: "X", column: "invalid" },
+    });
+    expect(res.status()).toBe(400);
+  });
+
+  test("get returns ticket", async ({ request }) => {
+    const create = await request.post("/api/tickets", {
+      data: { title: "Get me" },
+    });
+    ticketId = (await create.json()).id;
+    const res = await request.get(`/api/tickets/${ticketId}`);
+    expect(res.status()).toBe(200);
+  });
+
+  test("patch updates ticket", async ({ request }) => {
+    const create = await request.post("/api/tickets", {
+      data: { title: "Patch me" },
+    });
+    ticketId = (await create.json()).id;
+    const res = await request.patch(`/api/tickets/${ticketId}`, {
+      data: { title: "Patched" },
+    });
+    expect(res.status()).toBe(200);
+    expect((await res.json()).title).toBe("Patched");
+  });
+
+  test("move changes column", async ({ request }) => {
+    const create = await request.post("/api/tickets", {
+      data: { title: "Move me" },
+    });
+    ticketId = (await create.json()).id;
+    const res = await request.post(`/api/tickets/${ticketId}/move`, {
+      data: { column: "in-progress" },
+    });
+    expect(res.status()).toBe(200);
+    expect((await res.json()).column).toBe("in-progress");
+  });
+
+  test("delete removes ticket", async ({ request }) => {
+    const create = await request.post("/api/tickets", {
+      data: { title: "Delete me" },
+    });
+    ticketId = (await create.json()).id;
+    const res = await request.delete(`/api/tickets/${ticketId}`);
+    expect(res.status()).toBe(200);
+  });
+});

@@ -10,6 +10,7 @@ import { LogStore } from "./storage/logs.js";
 import { ProjectStore } from "./storage/projects.js";
 import { SessionStore } from "./storage/sessions.js";
 import { SettingsStore } from "./storage/settings.js";
+import { TicketStore } from "./storage/tickets.js";
 import { ClaudeExecutor } from "./executor/claude.js";
 import { createExecutor } from "./executor/factory.js";
 import type { Executor } from "./executor/types.js";
@@ -28,6 +29,7 @@ const logStore = new LogStore(config.dataDir);
 const projectStore = new ProjectStore(config.dataDir);
 const sessionStore = new SessionStore(config.dataDir);
 const settingsStore = new SettingsStore(config.dataDir);
+const ticketStore = new TicketStore(config.dataDir);
 
 // Executor — use settings when available, fall back to env config
 const settings = settingsStore.load();
@@ -60,7 +62,7 @@ const webDir = join(__dirname, "web");
 app.use(express.static(webDir));
 
 // API routes
-app.use("/api", createApiRouter(jobStore, logStore, queueManager, executor, projectStore, sessionStore, settingsStore, promptExecutor));
+app.use("/api", createApiRouter(jobStore, logStore, queueManager, executor, projectStore, sessionStore, settingsStore, ticketStore, promptExecutor));
 
 // SSE endpoint
 app.get("/api/events", (req, res) => {
