@@ -134,8 +134,12 @@ function showEditJobForm(id) {
         </div>
         <div class="form-row">
           <div class="form-group">
-            <label>Timeout (ms)</label>
-            <input id="e-timeout" type="number" value="${job.timeoutMs}" min="10000" step="10000">
+            <label>Hard Timeout (ms, 0 = none)</label>
+            <input id="e-timeout" type="number" value="${job.timeoutMs || 0}" min="0" step="60000">
+          </div>
+          <div class="form-group">
+            <label>Idle Timeout (ms, 0 = none)</label>
+            <input id="e-idle-timeout" type="number" value="${job.idleTimeoutMs || 1800000}" min="0" step="60000">
           </div>
           <div class="form-group">
             <label>Max Retries</label>
@@ -157,7 +161,8 @@ function showEditJobForm(id) {
         prompt: document.getElementById("e-prompt").value.trim(),
         model: document.getElementById("e-model").value || undefined,
         tags,
-        timeoutMs: parseInt(document.getElementById("e-timeout").value),
+        timeoutMs: parseInt(document.getElementById("e-timeout").value) || 0,
+        idleTimeoutMs: parseInt(document.getElementById("e-idle-timeout").value) || 0,
         maxRetries: parseInt(document.getElementById("e-retries").value),
       });
       showToast("Saved", "success");

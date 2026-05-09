@@ -79,9 +79,17 @@ function renderSubmit() {
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label for="f-timeout">Timeout (ms)</label>
-              <input id="f-timeout" type="number" value="600000" min="10000" step="10000">
+              <label for="f-timeout">Hard Timeout (ms, 0 = none)</label>
+              <input id="f-timeout" type="number" value="0" min="0" step="60000">
+              <div class="hint">Hard deadline. 0 = run indefinitely until naturally done or idle timeout.</div>
             </div>
+            <div class="form-group">
+              <label for="f-idle-timeout">Idle Timeout (ms, 0 = none)</label>
+              <input id="f-idle-timeout" type="number" value="1800000" min="0" step="60000">
+              <div class="hint">Kill if no output for this long. Default 30 min.</div>
+            </div>
+          </div>
+          <div class="form-row">
             <div class="form-group">
               <label for="f-retries">Max Retries</label>
               <input id="f-retries" type="number" value="2" min="0" max="10">
@@ -184,7 +192,8 @@ async function handleSubmit(e) {
       title: document.getElementById("f-title").value.trim(),
       prompt: document.getElementById("f-prompt").value.trim(),
       model: document.getElementById("f-model").value || undefined,
-      timeoutMs: parseInt(document.getElementById("f-timeout").value),
+      timeoutMs: parseInt(document.getElementById("f-timeout").value) || 0,
+      idleTimeoutMs: parseInt(document.getElementById("f-idle-timeout").value) || 0,
       maxRetries: parseInt(document.getElementById("f-retries").value),
       tags,
       projectId,

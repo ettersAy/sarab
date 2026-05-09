@@ -42,7 +42,10 @@ export class ClaudeExecutor implements Executor {
       let stderr = "";
       let capturedSessionId: string | undefined;
       let timedOut = false;
+      let idleTimedOut = false;
       let settled = false;
+      let hardTimer: ReturnType<typeof setTimeout> | null = null;
+      let idleTimer: ReturnType<typeof setTimeout> | null = null;
 
       this.currentProcess = spawn(this.claudeCmd, args, {
         stdio: ["ignore", "pipe", "pipe"],
@@ -50,26 +53,52 @@ export class ClaudeExecutor implements Executor {
         cwd: input.cwd,
       });
 
-      const timer = setTimeout(() => {
-        timedOut = true;
-        this.currentProcess?.kill("SIGTERM");
-        setTimeout(() => {
-          if (this.currentProcess && !this.currentProcess.killed) {
-            this.currentProcess.kill("SIGKILL");
-          }
-        }, 10_000);
-      }, input.timeoutMs);
+      // Hard timeout — only if timeoutMs > 0
+      if (input.timeoutMs > 0) {
+        hardTimer = setTimeout(() => {
+          timedOut = true;
+          logger.warn(`Hard timeout (${input.timeoutMs}ms) reached, killing...`);
+          this.currentProcess?.kill("SIGTERM");
+          setTimeout(() => {
+            if (this.currentProcess && !this.currentProcess.killed) {
+              this.currentProcess.kill("SIGKILL");
+            }
+          }, 10_000);
+        }, input.timeoutMs);
+      }
+
+      // Idle timeout — kill if no output for idleTimeoutMs
+      const resetIdleTimer = () => {
+        if (idleTimer) clearTimeout(idleTimer);
+        if (input.idleTimeoutMs > 0) {
+          idleTimer = setTimeout(() => {
+            idleTimedOut = true;
+            logger.warn(`Idle timeout (${input.idleTimeoutMs}ms) — no output, killing...`);
+            this.currentProcess?.kill("SIGTERM");
+            setTimeout(() => {
+              if (this.currentProcess && !this.currentProcess.killed) {
+                this.currentProcess.kill("SIGKILL");
+              }
+            }, 10_000);
+          }, input.idleTimeoutMs);
+        }
+      };
+
+      // Start idle timer — process must produce output to stay alive
+      resetIdleTimer();
 
       const finish = (exitCode: number) => {
         if (settled) return;
         settled = true;
-        clearTimeout(timer);
+        if (hardTimer) clearTimeout(hardTimer);
+        if (idleTimer) clearTimeout(idleTimer);
         this.currentProcess = null;
         resolve({
-          exitCode: timedOut ? 124 : this.killed ? 143 : exitCode,
+          exitCode: timedOut ? 124 : idleTimedOut ? 125 : this.killed ? 143 : exitCode,
           stdout,
           stderr,
           timedOut,
+          idleTimedOut,
           capturedSessionId,
           killed: this.killed,
         });
@@ -79,6 +108,8 @@ export class ClaudeExecutor implements Executor {
         const chunk = d.toString();
         stdout += chunk;
         input.onOutput?.(chunk);
+        input.onHeartbeat?.();
+        resetIdleTimer(); // Activity = reset idle clock
       });
       this.currentProcess.stderr?.on("data", (d: Buffer) => {
         const chunk = d.toString();

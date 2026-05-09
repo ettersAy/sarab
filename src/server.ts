@@ -25,7 +25,7 @@ const config = loadConfig();
 setLogFile(config.dataDir);
 
 // Storage
-const jobStore = new JobStore(config.dataDir, config.defaultTimeoutMs, config.defaultMaxRetries);
+const jobStore = new JobStore(config.dataDir, config.defaultTimeoutMs, config.defaultIdleTimeoutMs, config.defaultMaxRetries);
 const logStore = new LogStore(config.dataDir);
 const projectStore = new ProjectStore(config.dataDir);
 const sessionStore = new SessionStore(config.dataDir);

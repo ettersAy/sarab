@@ -25,7 +25,7 @@ Browser (SSE) → Express server → QueueManager (poll loop) → ClaudeExecutor
 - **`src/server.ts`** — entry point, wires DI, Express setup
 - **`src/config.ts`** — all env-based config, single source of truth
 - **`src/queue/manager.ts`** — poll loop, processes one job at a time, retry/backoff, session resolution, cwd from project
-- **`src/executor/claude.ts`** — spawns `claude -p "prompt"` with `--resume`, `cwd`, session capture from stderr
+- **`src/executor/claude.ts`** — spawns `claude -p "prompt"` with heartbeat-based idle timeout, `--resume`, `cwd`, session capture from stderr
 - **`src/executor/deepseek.ts`** — HTTP-based executor for DeepSeek/OpenAI-compatible APIs
 - **`src/executor/factory.ts`** — creates executor from AIProvider config
 - **`src/storage/jobs.ts`** — JSONL append + atomic uuid-tmp rewrite
@@ -70,6 +70,20 @@ Two execution modes via `executionMode` field on Job:
 Stop/Resume: `POST /api/jobs/:id/stop` (kills process, SIGTERM→SIGKILL), `POST /api/jobs/:id/resume` (re-queues as pending).
 JobStatus includes `"stopped"` (orange, between cancelled and failed).
 
+## Timeout model (heartbeat-based)
+
+Hard timeouts are replaced with idle detection:
+
+| Field | Default | Behavior |
+|-------|---------|----------|
+| `timeoutMs` | `0` (none) | Hard deadline. `0` = run indefinitely until naturally done. |
+| `idleTimeoutMs` | `1800000` (30 min) | Kill if **no stdout output** for this duration. Resets on every output chunk. `0` = disabled. |
+
+- **Heartbeat**: Every stdout chunk from Claude resets the idle timer. A process producing output is alive.
+- **Exit codes**: `124` = hard timeout, `125` = idle timeout (stuck), `143` = killed by user.
+- In the UI, timeout fields accept `0` for unlimited. The idle timeout defaults to 30 minutes.
+- Long-running missions (hours) work because the idle clock resets continuously as Claude produces output.
+
 ## Session execution modes
 
 5 modes supported via `sessionMode` field on Job:
@@ -89,6 +103,7 @@ When `projectId` is set, the executor runs with `cwd = project.rootPath`.
 
 - **Filesystem persistence**: Projects are stored as directories under `/srv/dev/sarab/projects/[slug]/` with `project.json` metadata. Tickets and prompts persist as markdown files in each project's subdirectories. JSONL files in `data/` provide secondary caching. See [Persistence Architecture](#persistence-architecture) below.
 - **JSONL storage**: `JobStore.list()` reads entire file per call — fine for <1000 jobs, degrades linearly. No DB.
+- **Heartbeat timeout**: Default is no hard timeout (0). Processes run indefinitely as long as they produce stdout. Idle timeout (30 min) catches stuck processes. Set via `idleTimeoutMs`.
 - **Single-threaded queue**: Only one Claude invocation at a time.
 - **Port in tests**: Smoke tests must pass PORT via env: `env PORT=XXXX npx tsx src/server.ts`. The config reads `process.env.PORT`, not CLI args.
 - **SSE curl hangs**: Always use `--max-time N` when curling SSE endpoints.

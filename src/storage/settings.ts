@@ -18,7 +18,8 @@ const DEFAULT_SETTINGS: AppSettings = {
   ],
   defaultProviderId: "claude-cli-default",
   executionDefaults: {
-    timeoutMs: 600_000,
+    timeoutMs: 0,           // No hard timeout by default
+    idleTimeoutMs: 1_800_000, // 30 min idle timeout
     maxRetries: 2,
   },
   promptImprovement: {

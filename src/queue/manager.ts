@@ -174,7 +174,8 @@ export class QueueManager extends EventEmitter {
       `ID:      ${job.id}`,
       `Title:   ${job.title}`,
       `Model:   ${job.model || "default"}`,
-      `Timeout: ${job.timeoutMs}ms`,
+      `Timeout: ${job.timeoutMs > 0 ? job.timeoutMs + "ms" : "none (heartbeat mode)"}`,
+      `Idle:    ${job.idleTimeoutMs > 0 ? job.idleTimeoutMs + "ms" : "none"}`,
       `Retries: ${job.maxRetries}`,
       `Started: ${new Date().toISOString()}`,
       `========================================`,
@@ -205,8 +206,12 @@ export class QueueManager extends EventEmitter {
         prompt: job.prompt,
         model: job.model,
         timeoutMs: job.timeoutMs,
+        idleTimeoutMs: job.idleTimeoutMs,
         onOutput: (chunk: string) => {
           this.logStore.write(job.id, chunk);
+        },
+        onHeartbeat: () => {
+          // SSE heartbeat keeps the UI aware the job is alive
         },
       };
 
@@ -241,6 +246,7 @@ export class QueueManager extends EventEmitter {
         "",
         `Exit code: ${result.exitCode}`,
         `Timed out: ${result.timedOut}`,
+        `Idle timed out: ${result.idleTimedOut}`,
         `Finished: ${new Date().toISOString()}`,
         "",
       ].join("\n");

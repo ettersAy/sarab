@@ -13,7 +13,8 @@ export class JobStore {
 
   constructor(
     dataDir: string,
-    private readonly defaultTimeoutMs: number = 600_000,
+    private readonly defaultTimeoutMs: number = 0,
+    private readonly defaultIdleTimeoutMs: number = 1_800_000,
     private readonly defaultMaxRetries: number = 2,
   ) {
     mkdirSync(dataDir, { recursive: true });
@@ -60,6 +61,7 @@ export class JobStore {
               model: parsed.meta.model || undefined,
               status: parsed.meta.status as Job["status"],
               timeoutMs: this.defaultTimeoutMs,
+              idleTimeoutMs: this.defaultIdleTimeoutMs,
               maxRetries: parsed.meta.maxRetries,
               attempt: parsed.meta.attempt,
               exitCode: parsed.meta.exitCode,
@@ -104,6 +106,7 @@ export class JobStore {
       model: input.model,
       status: "pending",
       timeoutMs: input.timeoutMs ?? this.defaultTimeoutMs,
+      idleTimeoutMs: input.idleTimeoutMs ?? this.defaultIdleTimeoutMs,
       maxRetries: input.maxRetries ?? this.defaultMaxRetries,
       attempt: 0,
       exitCode: null,

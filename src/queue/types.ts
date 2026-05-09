@@ -8,7 +8,8 @@ export interface Job {
   prompt: string;
   model?: string;
   status: JobStatus;
-  timeoutMs: number;
+  timeoutMs: number;        // 0 = no hard timeout
+  idleTimeoutMs: number;    // 0 = no idle timeout; >0 = kill if idle for this many ms
   maxRetries: number;
   attempt: number;
   exitCode: number | null;
@@ -32,6 +33,7 @@ export interface JobCreateInput {
   prompt: string;
   model?: string;
   timeoutMs?: number;
+  idleTimeoutMs?: number;
   maxRetries?: number;
   tags?: string[];
   projectId?: string;
@@ -110,6 +112,7 @@ export interface AppSettings {
   defaultProviderId: string;
   executionDefaults: {
     timeoutMs: number;
+    idleTimeoutMs: number;
     maxRetries: number;
   };
   promptImprovement: {

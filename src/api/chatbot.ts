@@ -89,6 +89,7 @@ export function createChatbotRouter(
         prompt: fullPrompt,
         model,
         timeoutMs: 60_000,
+        idleTimeoutMs: 0,
       });
 
       if (output.exitCode !== 0) {

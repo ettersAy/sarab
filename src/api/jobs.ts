@@ -42,7 +42,7 @@ export function createJobsRouter(jobStore: JobStore, logStore: LogStore, queueMa
 
   // Create job
   router.post("/", (req, res) => {
-    const { title, prompt, model, timeoutMs, maxRetries, tags, projectId, sessionId, sessionMode, executionMode } = req.body;
+    const { title, prompt, model, timeoutMs, idleTimeoutMs, maxRetries, tags, projectId, sessionId, sessionMode, executionMode } = req.body;
     if (!title || typeof title !== "string" || title.trim().length === 0) {
       throw new ValidationError("Title is required");
     }
@@ -57,6 +57,7 @@ export function createJobsRouter(jobStore: JobStore, logStore: LogStore, queueMa
       prompt: prompt.trim(),
       model,
       timeoutMs,
+      idleTimeoutMs,
       maxRetries,
       tags,
       projectId,
@@ -98,13 +99,14 @@ export function createJobsRouter(jobStore: JobStore, logStore: LogStore, queueMa
     if (job.status === "running" || job.status === "retrying") {
       throw new ValidationError("Cannot edit a running job");
     }
-    const { title, prompt, model, tags, timeoutMs, maxRetries } = req.body;
+    const { title, prompt, model, tags, timeoutMs, idleTimeoutMs, maxRetries } = req.body;
     const patch: Record<string, unknown> = {};
     if (title !== undefined) patch.title = title;
     if (prompt !== undefined) patch.prompt = prompt;
     if (model !== undefined) patch.model = model;
     if (tags !== undefined) patch.tags = tags;
     if (timeoutMs !== undefined) patch.timeoutMs = timeoutMs;
+    if (idleTimeoutMs !== undefined) patch.idleTimeoutMs = idleTimeoutMs;
     if (maxRetries !== undefined) patch.maxRetries = maxRetries;
     const updated = jobStore.update(req.params.id, patch);
     res.json(updated);
@@ -119,6 +121,7 @@ export function createJobsRouter(jobStore: JobStore, logStore: LogStore, queueMa
       prompt: original.prompt,
       model: original.model,
       timeoutMs: original.timeoutMs,
+      idleTimeoutMs: original.idleTimeoutMs,
       maxRetries: original.maxRetries,
       tags: [...original.tags],
       projectId: original.projectId,

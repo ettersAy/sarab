@@ -31,6 +31,7 @@ export function createPromptRouter(executor: Executor): Router {
       const output = await executor.execute({
         prompt: metaPrompt,
         timeoutMs: 30_000,
+        idleTimeoutMs: 0,
       });
 
       if (output.exitCode !== 0) {
