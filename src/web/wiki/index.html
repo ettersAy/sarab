@@ -1,0 +1,403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>SARAB Wiki — Documentation</title>
+  <style>
+    :root {
+      --bg: #0d1117; --bg2: #161b22; --bg3: #21262d;
+      --border: #30363d; --text: #c9d1d9; --dim: #8b949e;
+      --accent: #58a6ff; --green: #3fb950; --red: #f85149;
+      --orange: #db6d28; --purple: #a371f7;
+      --font: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+      --mono: "SF Mono", "Fira Code", "Cascadia Code", monospace;
+    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: var(--font); background: var(--bg); color: var(--text); display: flex; min-height: 100vh; }
+    nav {
+      width: 260px; min-width: 260px; background: var(--bg2); border-right: 1px solid var(--border);
+      padding: 24px 0; position: sticky; top: 0; height: 100vh; overflow-y: auto;
+    }
+    nav h2 { padding: 0 20px 16px; font-size: 16px; color: var(--accent); border-bottom: 1px solid var(--border); margin-bottom: 12px; }
+    nav a {
+      display: block; padding: 6px 20px; color: var(--dim); text-decoration: none; font-size: 13px;
+      border-left: 2px solid transparent; transition: all 0.15s;
+    }
+    nav a:hover, nav a.active { color: var(--text); border-left-color: var(--accent); background: rgba(88,166,255,0.06); }
+    nav a.sub { padding-left: 36px; font-size: 12px; }
+    main { flex: 1; padding: 32px 48px; max-width: 960px; }
+    h1 { font-size: 26px; margin-bottom: 8px; color: var(--accent); }
+    h2 { font-size: 20px; margin: 32px 0 12px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+    h3 { font-size: 16px; margin: 20px 0 8px; }
+    p, li { font-size: 14px; line-height: 1.7; color: var(--dim); margin-bottom: 8px; }
+    strong { color: var(--text); }
+    a { color: var(--accent); }
+    code { font-family: var(--mono); font-size: 12px; background: var(--bg3); padding: 2px 6px; border-radius: 3px; }
+    pre { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 14px 18px; overflow-x: auto; margin: 10px 0 16px; }
+    pre code { background: none; padding: 0; font-size: 12px; line-height: 1.6; }
+    table { width: 100%; border-collapse: collapse; margin: 10px 0 16px; font-size: 13px; }
+    th, td { text-align: left; padding: 8px 12px; border: 1px solid var(--border); }
+    th { background: var(--bg2); color: var(--text); font-weight: 600; }
+    td { color: var(--dim); }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; font-weight: 600; }
+    .badge-get { background: rgba(63,185,80,0.2); color: var(--green); }
+    .badge-post { background: rgba(88,166,255,0.2); color: var(--accent); }
+    .badge-put { background: rgba(210,153,29,0.2); color: var(--orange); }
+    .badge-delete { background: rgba(248,81,73,0.2); color: var(--red); }
+    .badge-patch { background: rgba(163,113,247,0.2); color: var(--purple); }
+    .toc { background: var(--bg2); border: 1px solid var(--border); border-radius: 6px; padding: 16px 20px; margin: 16px 0; }
+    .toc a { display: block; font-size: 13px; padding: 2px 0; }
+    @media (max-width: 768px) {
+      body { flex-direction: column; }
+      nav { width: 100%; min-width: 0; height: auto; position: static; border-right: none; border-bottom: 1px solid var(--border); padding: 12px 16px; }
+      nav a { display: inline-block; border-left: none; border-bottom: 2px solid transparent; margin-right: 8px; padding: 4px 8px; }
+      main { padding: 16px; }
+    }
+  </style>
+</head>
+<body>
+<nav id="nav">
+  <h2>SARAB Wiki</h2>
+  <a href="#overview">Overview</a>
+  <a href="#quickstart">Quick Start</a>
+  <a href="#architecture">Architecture</a>
+  <a href="#backend" class="sub">Backend</a>
+  <a href="#frontend" class="sub">Frontend</a>
+  <a href="#persistence">Persistence</a>
+  <a href="#api-reference">API Reference</a>
+  <a href="#api-jobs" class="sub">Jobs</a>
+  <a href="#api-projects" class="sub">Projects</a>
+  <a href="#api-tickets" class="sub">Tickets</a>
+  <a href="#api-chatbot" class="sub">Chatbot</a>
+  <a href="#api-settings" class="sub">Settings</a>
+  <a href="#api-sessions" class="sub">Sessions</a>
+  <a href="#features">Features</a>
+  <a href="#chatbot">Chatbot</a>
+  <a href="#testing">Testing</a>
+  <a href="#development">Development</a>
+  <a href="#known-pitfalls">Known Pitfalls</a>
+</nav>
+
+<main>
+
+<h1 id="overview">SARAB — Smart AI Request Automation Bot</h1>
+<p>A web UI for queuing and executing <strong>Claude CLI</strong> prompts with real-time SSE monitoring, project context management, Kanban board, and an AI project chatbot.</p>
+
+<div class="toc">
+  <strong style="color:var(--text)">Quick Links</strong>
+  <a href="#quickstart">Quick Start Guide</a>
+  <a href="#architecture">Architecture Diagram</a>
+  <a href="#api-reference">Full API Reference</a>
+  <a href="#chatbot">Project Chatbot</a>
+  <a href="#testing">Test Guide</a>
+</div>
+
+<h2 id="quickstart">Quick Start</h2>
+<pre><code># Install
+npm install
+
+# Start dev server (port 3457)
+npm run dev
+
+# Run tests
+npx tsc --noEmit             # Type check
+./scripts/smoke-test.sh      # 16 API checks
+npx playwright test          # 97 browser tests</code></pre>
+<p>Server starts at <code>http://localhost:3457</code>. The web UI loads automatically.</p>
+
+<h2 id="architecture">Architecture</h2>
+<pre><code>Browser (SSE) → Express server → QueueManager (poll loop) → ClaudeExecutor (spawn claude CLI)
+                              → JobStore + ProjectStore + TicketStore + ChatStore (JSONL + filesystem)
+                              → LogStore (files) + SettingsStore (JSON)
+                              → Executor (Claude CLI / DeepSeek HTTP) for prompt improvement & chatbot</code></pre>
+
+<h3 id="backend">Backend Structure</h3>
+<table>
+  <tr><th>Module</th><th>File</th><th>Purpose</th></tr>
+  <tr><td>Entry</td><td><code>src/server.ts</code></td><td>Express setup, DI wiring, startup/shutdown</td></tr>
+  <tr><td>Config</td><td><code>src/config.ts</code></td><td>Single source of truth for all env-based config</td></tr>
+  <tr><td>Queue</td><td><code>src/queue/manager.ts</code></td><td>Poll loop, one-at-a-time processing, retry/backoff</td></tr>
+  <tr><td>SSE</td><td><code>src/queue/sse.ts</code></td><td>Server-Sent Events manager for real-time updates</td></tr>
+  <tr><td>Executor</td><td><code>src/executor/claude.ts</code></td><td>Spawns <code>claude -p "prompt"</code> with resume, cwd, session capture</td></tr>
+  <tr><td>Executor</td><td><code>src/executor/deepseek.ts</code></td><td>HTTP-based executor for OpenAI-compatible APIs</td></tr>
+  <tr><td>Executor</td><td><code>src/executor/factory.ts</code></td><td>Creates executor from AIProvider config</td></tr>
+  <tr><td>API</td><td><code>src/api/router.ts</code></td><td>Aggregates all sub-routers under <code>/api</code></td></tr>
+  <tr><td>Chatbot</td><td><code>src/chatbot/context.ts</code></td><td>Loads project docs, builds AI prompts with context</td></tr>
+</table>
+
+<h3 id="frontend">Frontend Structure</h3>
+<table>
+  <tr><th>Module</th><th>File</th><th>Purpose</th></tr>
+  <tr><td>Core</td><td><code>web/js/core.js</code></td><td>State, routing, SSE, helpers, init</td></tr>
+  <tr><td>Dashboard</td><td><code>web/js/views/dashboard.js</code></td><td>Stats cards, recent jobs, Kanban overview</td></tr>
+  <tr><td>Queue</td><td><code>web/js/views/queue.js</code></td><td>Job list, filtering, search, pagination</td></tr>
+  <tr><td>Submit</td><td><code>web/js/views/submit.js</code></td><td>New prompt form, prompt improvement, session selection</td></tr>
+  <tr><td>Projects</td><td><code>web/js/views/projects.js</code></td><td>Project CRUD, detail view with sessions</td></tr>
+  <tr><td>Kanban</td><td><code>web/js/views/kanban.js</code></td><td>Ticket board with drag-and-drop, ticket CRUD</td></tr>
+  <tr><td>Settings</td><td><code>web/js/views/settings.js</code></td><td>AI provider management, execution defaults</td></tr>
+  <tr><td>Chatbot</td><td><code>web/js/views/chatbot.js</code></td><td>Project Q&A chatbot with context-aware AI</td></tr>
+  <tr><td>Actions</td><td><code>web/js/actions.js</code></td><td>Job actions: cancel, retry, delete, stop, resume, view</td></tr>
+  <tr><td>Modals</td><td><code>web/js/modals.js</code></td><td>Modal close handlers, escape key, overlay clicks</td></tr>
+</table>
+
+<h2 id="persistence">Persistence Architecture</h2>
+<p>Projects, tickets, and prompts <strong>persist to the filesystem</strong> under <code>/srv/dev/sarab/projects/</code>. JSONL files in <code>data/</code> provide secondary caching.</p>
+
+<h3>Directory Layout</h3>
+<pre><code>/srv/dev/sarab/projects/
+  └── my-project/                  # slugified project name
+      ├── project.json             # { id, name, rootPath, createdAt, updatedAt, settings }
+      ├── tickets/
+      │   └── backlog/
+      │       └── my-ticket-xxxxxxxx.md   # markdown with metadata + content
+      └── prompts/
+          └── my-prompt-xxxxxxxx.md       # markdown with metadata + prompt</code></pre>
+
+<h3>Key Modules</h3>
+<table>
+  <tr><th>File</th><th>Responsibility</th></tr>
+  <tr><td><code>storage/fs-utils.ts</code></td><td>Slugify, safe filenames, project dir scanning, project.json read/write, path validation</td></tr>
+  <tr><td><code>storage/md-serializer.ts</code></td><td>Markdown serialization/deserialization for tickets and prompts</td></tr>
+  <tr><td><code>storage/projects.ts</code></td><td>Project CRUD backed by filesystem directories</td></tr>
+  <tr><td><code>storage/tickets.ts</code></td><td>Ticket CRUD backed by JSONL cache + markdown files</td></tr>
+  <tr><td><code>storage/jobs.ts</code></td><td>Job CRUD backed by JSONL cache + markdown for prompts</td></tr>
+  <tr><td><code>storage/chatbot.ts</code></td><td>Chat conversations and messages in JSONL</td></tr>
+</table>
+
+<h3>Error Handling Rules</h3>
+<ul>
+  <li>Malformed markdown files → skipped with warning, never crash</li>
+  <li>Path traversal in project names → <code>400 ValidationError</code></li>
+  <li>Duplicate project directory → <code>400 "Project folder already exists: [slug]"</code></li>
+  <li>Project name with only special chars → <code>400</code> from slugify producing empty result</li>
+</ul>
+
+<h2 id="api-reference">API Reference</h2>
+
+<h3 id="api-jobs">Jobs</h3>
+<table>
+  <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/jobs</code></td><td>List all jobs (supports <code>?limit=N&offset=N</code> pagination)</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/jobs/stats</code></td><td>Queue statistics (pending, running, completed, failed, cancelled, stopped, total)</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/jobs</code></td><td>Create job (title, prompt required; model, tags, projectId, sessionMode optional)</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/jobs/:id</code></td><td>Get single job by ID</td></tr>
+  <tr><td><span class="badge badge-patch">PATCH</span></td><td><code>/api/jobs/:id</code></td><td>Edit job (title, prompt, model, tags, timeoutMs, maxRetries)</td></tr>
+  <tr><td><span class="badge badge-delete">DELETE</span></td><td><code>/api/jobs/:id</code></td><td>Delete a non-running job</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/jobs/:id/cancel</code></td><td>Cancel a pending job</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/jobs/:id/stop</code></td><td>Stop a running job (SIGTERM → SIGKILL)</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/jobs/:id/resume</code></td><td>Resume a stopped job (re-queues as pending)</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/jobs/:id/retry</code></td><td>Retry a cancelled or failed job</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/jobs/:id/duplicate</code></td><td>Create copy of a job</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/jobs/:id/log</code></td><td>Get job execution log</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/jobs/:id/detail</code></td><td>Get job with linked info and log content</td></tr>
+</table>
+
+<h3 id="api-projects">Projects</h3>
+<table>
+  <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/projects</code></td><td>List all projects (from filesystem scan)</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/projects</code></td><td>Create project (name, rootPath required; creates directory + project.json)</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/projects/:id</code></td><td>Get single project</td></tr>
+  <tr><td><span class="badge badge-put">PUT</span></td><td><code>/api/projects/:id</code></td><td>Update project (renames dir if name changes)</td></tr>
+  <tr><td><span class="badge badge-delete">DELETE</span></td><td><code>/api/projects/:id</code></td><td>Delete project and its directory</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/projects/:id/jobs</code></td><td>List jobs for a project</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/projects/:id/sessions</code></td><td>List Claude sessions for a project</td></tr>
+</table>
+
+<h3 id="api-tickets">Tickets (Kanban)</h3>
+<table>
+  <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/tickets</code></td><td>List tickets (filter by <code>?projectId=</code>, <code>?column=</code>)</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/tickets</code></td><td>Create ticket (title required; description, column, priority, projectId optional)</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/tickets/:id</code></td><td>Get single ticket</td></tr>
+  <tr><td><span class="badge badge-patch">PATCH</span></td><td><code>/api/tickets/:id</code></td><td>Update ticket fields</td></tr>
+  <tr><td><span class="badge badge-delete">DELETE</span></td><td><code>/api/tickets/:id</code></td><td>Delete ticket</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/tickets/:id/move</code></td><td>Move ticket to another column</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/tickets/:id/subtickets</code></td><td>Get subtickets for a parent ticket</td></tr>
+</table>
+
+<h3 id="api-chatbot">Chatbot</h3>
+<table>
+  <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/chatbot/ask</code></td><td>Ask a question about a project (projectId, question required; conversationId, model optional)</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/chatbot/conversations?projectId=</code></td><td>List conversations for a project</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/chatbot/conversations/:id/messages</code></td><td>Get messages for a conversation</td></tr>
+  <tr><td><span class="badge badge-delete">DELETE</span></td><td><code>/api/chatbot/conversations/:id</code></td><td>Delete conversation and its messages</td></tr>
+</table>
+
+<h3 id="api-settings">Settings</h3>
+<table>
+  <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/settings</code></td><td>Get full app settings</td></tr>
+  <tr><td><span class="badge badge-put">PUT</span></td><td><code>/api/settings</code></td><td>Save settings</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/settings/providers</code></td><td>List AI providers</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/settings/providers</code></td><td>Add AI provider</td></tr>
+  <tr><td><span class="badge badge-put">PUT</span></td><td><code>/api/settings/providers/:id</code></td><td>Update provider</td></tr>
+  <tr><td><span class="badge badge-delete">DELETE</span></td><td><code>/api/settings/providers/:id</code></td><td>Delete provider (not allowed for default)</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/settings/providers/:id/default</code></td><td>Set provider as default</td></tr>
+</table>
+
+<h3 id="api-sessions">Sessions & Other</h3>
+<table>
+  <tr><th>Method</th><th>Path</th><th>Description</th></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/sessions</code></td><td>List sessions (<code>?projectId=</code> optional)</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/sessions/latest</code></td><td>Get latest session</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/sessions/:id</code></td><td>Get session by ID</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/prompt/improve</code></td><td>AI-powered prompt improvement (action: reformulate/improve/correct/shorten/expand)</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/queue/pause</code></td><td>Pause the job queue</td></tr>
+  <tr><td><span class="badge badge-post">POST</span></td><td><code>/api/queue/resume</code></td><td>Resume the job queue</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/queue/status</code></td><td>Get queue running state</td></tr>
+  <tr><td><span class="badge badge-get">GET</span></td><td><code>/api/events</code></td><td>SSE stream for real-time updates</td></tr>
+</table>
+
+<h2 id="features">Feature Summary</h2>
+
+<h3>Execution Modes</h3>
+<table>
+  <tr><th>Mode</th><th>Behavior</th></tr>
+  <tr><td><code>"api"</code> (default)</td><td>One-shot Claude CLI execution via <code>-p "prompt"</code></td></tr>
+  <tr><td><code>"terminal"</code></td><td>Runs from project root, supports stop/resume, live log streaming</td></tr>
+</table>
+
+<h3>Session Modes</h3>
+<table>
+  <tr><th>sessionMode</th><th>sessionId</th><th>Behavior</th></tr>
+  <tr><td>(unset)</td><td>—</td><td>Fresh session, no resume</td></tr>
+  <tr><td><code>"new"</code></td><td>—</td><td>Explicit fresh session</td></tr>
+  <tr><td><code>"resume"</code></td><td>set</td><td>Resume specific session via <code>--resume</code></td></tr>
+  <tr><td><code>"resume"</code></td><td>unset</td><td>Resume latest session for project</td></tr>
+  <tr><td><code>"latest"</code></td><td>—</td><td>Resume latest session for project</td></tr>
+</table>
+
+<h3>Kanban Columns</h3>
+<p><code>backlog</code> → <code>ready</code> → <code>in-progress</code> → <code>paused</code> → <code>testing</code> → <code>done</code></p>
+<p>Priorities: <code>low</code>, <code>medium</code>, <code>high</code>, <code>critical</code></p>
+
+<h3>Prompt Improvement Actions</h3>
+<p><code>reformulate</code> | <code>improve</code> | <code>correct</code> | <code>shorten</code> | <code>expand</code></p>
+
+<h2 id="chatbot">Project Chatbot</h2>
+<p>The chatbot lets users ask questions about a selected project, with AI answers grounded in project documentation.</p>
+
+<h3>How It Works</h3>
+<ol>
+  <li>User selects a project and asks a question</li>
+  <li>Server loads context files defined in <strong>Project Settings → contextFiles</strong></li>
+  <li>Context is assembled with safety checks: path traversal blocked, file size limit (50KB/file, 100KB total), missing files flagged</li>
+  <li>AI prompt is built: system instruction + project name + context files + user question</li>
+  <li>Response is returned with metadata about which context files were used</li>
+</ol>
+
+<h3>Data Model</h3>
+<pre><code>ChatConversation { id, projectId, title, model, createdAt, updatedAt }
+ChatMessage { id, conversationId, role: "user"|"assistant", content, contextFiles[], model, error, createdAt }</code></pre>
+
+<h3>Quick Actions</h3>
+<ul>
+  <li>"What is this project about?"</li>
+  <li>"Summarize the project architecture"</li>
+  <li>"What are the main features?"</li>
+  <li>"How do I run this project?"</li>
+  <li>"What are the key files?"</li>
+  <li>"Explain the project structure"</li>
+</ul>
+
+<h2 id="testing">Testing</h2>
+<table>
+  <tr><th>Type</th><th>Command</th><th>Count</th></tr>
+  <tr><td>TypeScript check</td><td><code>npx tsc --noEmit</code></td><td>—</td></tr>
+  <tr><td>JS syntax check</td><td><code>node -c src/web/js/*.js</code></td><td>10 files</td></tr>
+  <tr><td>Smoke tests</td><td><code>./scripts/smoke-test.sh [PORT]</code></td><td>16 tests</td></tr>
+  <tr><td>Playwright API</td><td><code>npx playwright test</code></td><td>~75 API tests</td></tr>
+  <tr><td>Playwright UI</td><td><code>npx playwright test</code></td><td>~22 UI tests</td></tr>
+  <tr><td>Full suite</td><td><code>./scripts/run-all-tests.sh</code></td><td>97 total</td></tr>
+</table>
+
+<h3>Test Commands</h3>
+<pre><code>npm run dev                  # Start dev server (port 3457, or $PORT)
+npm run build                # TypeScript → dist/
+npm run check                # tsc --noEmit
+npm test                     # Playwright (97 tests, ~1.1min)
+./scripts/smoke-test.sh [PORT]  # 16 API checks
+./scripts/run-all-tests.sh      # Full suite (JS + TS + Smoke + Playwright)</code></pre>
+
+<h2 id="development">Development Guide</h2>
+
+<h3>Where to Change Code</h3>
+<table>
+  <tr><th>Feature</th><th>Files</th></tr>
+  <tr><td>Job lifecycle</td><td><code>queue/manager.ts</code>, <code>executor/claude.ts</code></td></tr>
+  <tr><td>Projects & sessions</td><td><code>storage/projects.ts</code>, <code>storage/sessions.ts</code>, <code>api/projects.ts</code></td></tr>
+  <tr><td>Settings & providers</td><td><code>storage/settings.ts</code>, <code>api/settings.ts</code>, <code>executor/factory.ts</code></td></tr>
+  <tr><td>API endpoints</td><td><code>api/router.ts</code> + sub-routers</td></tr>
+  <tr><td>Tickets & Kanban</td><td><code>storage/tickets.ts</code>, <code>api/tickets.ts</code>, <code>views/kanban.js</code></td></tr>
+  <tr><td>Chatbot</td><td><code>storage/chatbot.ts</code>, <code>api/chatbot.ts</code>, <code>chatbot/context.ts</code>, <code>views/chatbot.js</code></td></tr>
+  <tr><td>Filesystem persistence</td><td><code>storage/fs-utils.ts</code>, <code>storage/md-serializer.ts</code></td></tr>
+  <tr><td>Storage format</td><td><code>storage/jobs.ts</code>, <code>queue/types.ts</code></td></tr>
+  <tr><td>Frontend UI</td><td><code>web/js/core.js</code> (state), <code>web/js/views/*.js</code> (views)</td></tr>
+  <tr><td>Config/env</td><td><code>config.ts</code></td></tr>
+  <tr><td>Error handling</td><td><code>errors.ts</code></td></tr>
+  <tr><td>Logging</td><td><code>logger.ts</code></td></tr>
+  <tr><td>SSE events</td><td><code>queue/sse.ts</code>, <code>queue/manager.ts</code></td></tr>
+</table>
+
+<h3>Code Conventions</h3>
+<ul>
+  <li>One concern per file</li>
+  <li><code>AppError</code> hierarchy for all thrown errors (no raw <code>new Error</code>)</li>
+  <li>Config defaults flow from <code>config.ts</code> → constructors (not hardcoded twice)</li>
+  <li>Storage: JSONL per entity + filesystem for projects</li>
+  <li>Frontend: vanilla JS, no framework or bundler</li>
+  <li><strong>No TypeScript syntax in JS files</strong> — no <code>: any</code> annotations</li>
+  <li>API convention: factory functions <code>createXxxRouter(dep1, dep2)</code> returning Express Router</li>
+  <li>DI: manual linear wiring in <code>server.ts</code>, no container needed</li>
+  <li>Run <code>node -c</code> after every JS edit</li>
+</ul>
+
+<h2 id="known-pitfalls">Known Pitfalls</h2>
+<ul>
+  <li><strong>JSONL storage</strong>: <code>JobStore.list()</code> reads entire file per call — fine for <1000 jobs, degrades linearly. No DB.</li>
+  <li><strong>Single-threaded queue</strong>: Only one Claude invocation at a time.</li>
+  <li><strong>Port in tests</strong>: Smoke tests must pass PORT via env: <code>env PORT=XXXX npx tsx src/server.ts</code>.</li>
+  <li><strong>SSE curl hangs</strong>: Always use <code>--max-time N</code> when curling SSE endpoints.</li>
+  <li><strong>Job cancel race</strong>: Queue may pick up a job before you cancel it. Pause queue first in tests.</li>
+  <li><strong>Claude CLI</strong>: Uses <code>--dangerously-skip-permissions</code>. Ensure <code>claude</code> is in PATH.</li>
+  <li><strong>No framework</strong>: Frontend is vanilla JS. No React, no bundler.</li>
+  <li><strong>TS syntax in JS</strong>: Do NOT use <code>: any</code> or other TypeScript annotations in JS files.</li>
+  <li><strong>Settings</strong>: Default provider cannot be deleted. At least one provider must exist.</li>
+  <li><strong>Settings wiring</strong>: When adding storage, ALWAYS add runtime integration in the same commit.</li>
+</ul>
+
+<h2>Environment Variables</h2>
+<table>
+  <tr><th>Variable</th><th>Default</th><th>Purpose</th></tr>
+  <tr><td><code>PORT</code></td><td>3457</td><td>Server port</td></tr>
+  <tr><td><code>SARAB_DATA_DIR</code></td><td>./data</td><td>Data storage directory</td></tr>
+  <tr><td><code>CLAUDE_CMD</code></td><td>claude</td><td>Claude CLI binary</td></tr>
+  <tr><td><code>CLAUDE_FLAGS</code></td><td>--dangerously-skip-permissions</td><td>Flags passed to claude CLI</td></tr>
+  <tr><td><code>SARAB_TIMEOUT</code></td><td>600000</td><td>Default job timeout (ms)</td></tr>
+  <tr><td><code>SARAB_MAX_RETRIES</code></td><td>2</td><td>Default max retries</td></tr>
+  <tr><td><code>SARAB_POLL_INTERVAL</code></td><td>5000</td><td>Queue poll interval (ms)</td></tr>
+  <tr><td><code>SARAB_CONCURRENCY</code></td><td>1</td><td>Max concurrent executions</td></tr>
+</table>
+
+<footer style="margin-top:48px;padding:24px 0;border-top:1px solid var(--border);color:var(--dim);font-size:12px">
+  <p>SARAB v1.0.0 — Smart AI Request Automation Bot</p>
+  <p><a href="/">Back to App</a> · <a href="#overview">Back to Top</a></p>
+</footer>
+
+</main>
+
+<script>
+  // Highlight current nav item on scroll
+  const sections = document.querySelectorAll('h2[id], h3[id]');
+  const navLinks = document.querySelectorAll('nav a');
+  window.addEventListener('scroll', () => {
+    let current = '';
+    sections.forEach(s => { if (window.scrollY >= s.offsetTop - 100) current = s.id; });
+    navLinks.forEach(a => { a.classList.toggle('active', a.getAttribute('href') === '#' + current); });
+  });
+</script>
+</body>
+</html>

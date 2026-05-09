@@ -7,6 +7,49 @@
 ---
 
 ## Mission-by-Mission Analysis
+## Phase 00 — MCP environment setup
+
+Before starting implementation, audit and install all useful MCP servers/tools for this type of project.
+
+Investigate and setup MCP servers useful for:
+
+* Playwright/browser automation
+* filesystem/project navigation
+* git/github workflows
+* terminal/command execution
+* documentation/code indexing
+* database inspection
+* logs/debugging
+* architecture/code search
+* API testing
+* JSON/Markdown manipulation
+* task automation
+
+Tasks:
+
+* Detect which MCP servers are already installed/configured
+* Install/configure missing useful MCP servers
+* Validate they work correctly
+* Organize MCP configuration cleanly
+* Remove broken/redundant MCP configs if needed
+
+Also:
+
+* Create/update documentation explaining available MCP tools
+* Explain when each MCP should be used
+* Add useful project-specific MCP workflows/shortcuts if relevant
+* Update AI instruction docs so future sessions know available MCP capabilities
+
+Audit/refactor MCP configs/scripts if needed:
+
+* split long configs
+* improve maintainability
+* remove duplication
+* keep configuration modular
+
+Add/update tests/check scripts when relevant.
+
+Keep writing progress into `mission.log`.
 
 ### Mission 001 — MVP Build
 - **What worked**: Backend architecture is solid. JSONL pattern, AppError hierarchy, factory-function DI all held up well.
@@ -123,3 +166,4 @@
 4. Add Kanban UI test
 
 5. Verify all 72 tests pass
+

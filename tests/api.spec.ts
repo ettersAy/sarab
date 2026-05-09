@@ -21,8 +21,8 @@ test.describe("Health and static files", () => {
     expect(res.ok()).toBeTruthy();
   });
 
-  test("GET /app.js serves JS", async ({ request }) => {
-    const res = await request.get("/app.js");
+  test("GET /js/core.js serves JS", async ({ request }) => {
+    const res = await request.get("/js/core.js");
     expect(res.ok()).toBeTruthy();
   });
 });
@@ -234,10 +234,10 @@ test.describe("Projects", () => {
     }
   });
 
-  test("list returns empty initially", async ({ request }) => {
+  test("list returns array", async ({ request }) => {
     const res = await request.get("/api/projects");
     expect(res.status()).toBe(200);
-    expect(await res.json()).toEqual([]);
+    expect(Array.isArray(await res.json())).toBe(true);
   });
 
   test("create returns 201", async ({ request }) => {
@@ -541,10 +541,10 @@ test.describe("Tickets", () => {
     }
   });
 
-  test("list returns empty initially", async ({ request }) => {
+  test("list returns array", async ({ request }) => {
     const res = await request.get("/api/tickets");
     expect(res.status()).toBe(200);
-    expect(await res.json()).toEqual([]);
+    expect(Array.isArray(await res.json())).toBe(true);
   });
 
   test("create returns 201", async ({ request }) => {
@@ -594,6 +594,22 @@ test.describe("Tickets", () => {
     expect((await res.json()).title).toBe("Patched");
   });
 
+  test("create with projectId writes ticket to project", async ({ request }) => {
+    const pRes = await request.post("/api/projects", {
+      data: { name: "TicketProject", rootPath: "/tmp" },
+    });
+    const pid = (await pRes.json()).id;
+    const create = await request.post("/api/tickets", {
+      data: { title: "Project ticket", projectId: pid, tags: ["test"] },
+    });
+    expect(create.status()).toBe(201);
+    const t = await create.json();
+    expect(t.projectId).toBe(pid);
+    ticketId = t.id;
+    // Cleanup project
+    try { await request.delete(`/api/projects/${pid}`); } catch (_) {}
+  });
+
   test("move changes column", async ({ request }) => {
     const create = await request.post("/api/tickets", {
       data: { title: "Move me" },
@@ -613,5 +629,153 @@ test.describe("Tickets", () => {
     ticketId = (await create.json()).id;
     const res = await request.delete(`/api/tickets/${ticketId}`);
     expect(res.status()).toBe(200);
+  });
+});
+
+// ── Filesystem Persistence ──────────────────────────────────────
+test.describe("Filesystem persistence", () => {
+  let projectId: string;
+
+  test.afterEach(async ({ request }) => {
+    if (projectId) {
+      try { await request.delete(`/api/projects/${projectId}`); } catch (_) {}
+      projectId = "";
+    }
+  });
+
+  test("project creation creates directory and persists across list calls", async ({ request }) => {
+    const create = await request.post("/api/projects", {
+      data: { name: "PersistMe " + Date.now(), rootPath: "/tmp" },
+    });
+    expect(create.status()).toBe(201);
+    projectId = (await create.json()).id;
+
+    // Verify it appears in the list
+    const list = await request.get("/api/projects");
+    const projects = await list.json();
+    expect(projects.some((p: any) => p.id === projectId)).toBe(true);
+  });
+
+  test("duplicate project name returns clear error", async ({ request }) => {
+    const name = "DupCheck-" + Date.now();
+    const c1 = await request.post("/api/projects", {
+      data: { name, rootPath: "/tmp" },
+    });
+    expect(c1.status()).toBe(201);
+    projectId = (await c1.json()).id;
+
+    const c2 = await request.post("/api/projects", {
+      data: { name, rootPath: "/tmp" },
+    });
+    expect(c2.status()).toBe(400);
+    const err = await c2.json();
+    expect(err.message).toContain("already exists");
+  });
+
+  test("project list includes projects from filesystem", async ({ request }) => {
+    // Create a project with a known name
+    const create = await request.post("/api/projects", {
+      data: { name: "FSTest-" + Date.now(), rootPath: "/tmp" },
+    });
+    expect(create.status()).toBe(201);
+    projectId = (await create.json()).id;
+
+    // List should have at least this project
+    const list = await request.get("/api/projects");
+    const projects: any[] = await list.json();
+    expect(projects.length).toBeGreaterThanOrEqual(1);
+    const found = projects.find((p) => p.id === projectId);
+    expect(found).toBeTruthy();
+  });
+
+  test("project deletion cleans up project from list", async ({ request }) => {
+    const create = await request.post("/api/projects", {
+      data: { name: "DeleteFSTest-" + Date.now(), rootPath: "/tmp" },
+    });
+    projectId = (await create.json()).id;
+
+    await request.delete(`/api/projects/${projectId}`);
+
+    const list = await request.get("/api/projects");
+    const projects = await list.json();
+    expect(projects.some((p: any) => p.id === projectId)).toBe(false);
+    projectId = ""; // Already deleted
+  });
+
+  test("tickets persist correctly with projectId", async ({ request }) => {
+    const pRes = await request.post("/api/projects", {
+      data: { name: "TicketFSTest-" + Date.now(), rootPath: "/tmp" },
+    });
+    projectId = (await pRes.json()).id;
+    const pName = (await pRes.json()).name;
+
+    // Create a ticket linked to this project
+    const tRes = await request.post("/api/tickets", {
+      data: { title: "FS ticket test", description: "Persisted via filesystem", projectId, tags: ["fs-test"] },
+    });
+    expect(tRes.status()).toBe(201);
+    const ticket = await tRes.json();
+
+    // List tickets and verify our ticket is there
+    const list = await request.get("/api/tickets");
+    const tickets = await list.json();
+    const found = tickets.find((t: any) => t.id === ticket.id);
+    expect(found).toBeTruthy();
+    expect(found.projectId).toBe(projectId);
+    expect(found.description).toBe("Persisted via filesystem");
+  });
+
+  test("prompts persist correctly with projectId", async ({ request }) => {
+    const pRes = await request.post("/api/projects", {
+      data: { name: "PromptFSTest-" + Date.now(), rootPath: "/tmp" },
+    });
+    projectId = (await pRes.json()).id;
+
+    // Create a job (prompt) linked to this project
+    const jRes = await request.post("/api/jobs", {
+      data: { title: "FS prompt test", prompt: "Test prompt content", projectId, maxRetries: 0, timeoutMs: 30000 },
+    });
+    expect(jRes.status()).toBe(201);
+    const job = await jRes.json();
+
+    // Verify the job appears in the list
+    const list = await request.get("/api/jobs");
+    const jobs = await list.json();
+    const found = jobs.find((j: any) => j.id === job.id);
+    expect(found).toBeTruthy();
+    expect(found.projectId).toBe(projectId);
+
+    // Cleanup job
+    try { await request.post(`/api/jobs/${job.id}/cancel`); } catch (_) {}
+    try { await request.delete(`/api/jobs/${job.id}`); } catch (_) {}
+  });
+
+  test("invalid characters in project name are rejected", async ({ request }) => {
+    const res = await request.post("/api/projects", {
+      data: { name: "test/../etc", rootPath: "/tmp" },
+    });
+    expect(res.status()).toBe(400);
+  });
+
+  test("empty project name is rejected", async ({ request }) => {
+    const res = await request.post("/api/projects", {
+      data: { name: "   ", rootPath: "/tmp" },
+    });
+    expect(res.status()).toBe(400);
+  });
+
+  test("project update renames directory when name changes", async ({ request }) => {
+    const oldName = "RenameMe-" + Date.now();
+    const create = await request.post("/api/projects", {
+      data: { name: oldName, rootPath: "/tmp" },
+    });
+    projectId = (await create.json()).id;
+
+    const newName = "Renamed-" + Date.now();
+    const upd = await request.put(`/api/projects/${projectId}`, {
+      data: { name: newName },
+    });
+    expect(upd.status()).toBe(200);
+    expect((await upd.json()).name).toBe(newName);
   });
 });

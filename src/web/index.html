@@ -19,7 +19,9 @@
       <button data-view="queue" class="nav-btn">Queue</button>
       <button data-view="submit" class="nav-btn">New Prompt</button>
       <button data-view="kanban" class="nav-btn">Kanban</button>
+      <button data-view="chatbot" class="nav-btn">Chatbot</button>
       <button data-view="settings" class="nav-btn">Settings</button>
+      <a href="/wiki" class="nav-btn" style="text-decoration:none" target="_blank">Wiki &#8599;</a>
     </nav>
     <div class="topbar-status">
       <span id="queue-indicator" class="indicator running">&#9679;</span>
@@ -75,6 +77,15 @@
 
   <div id="toast" class="toast hidden"></div>
 
-  <script src="/app.js"></script>
+  <script src="/js/core.js"></script>
+  <script src="/js/views/dashboard.js"></script>
+  <script src="/js/views/queue.js"></script>
+  <script src="/js/views/submit.js"></script>
+  <script src="/js/views/projects.js"></script>
+  <script src="/js/views/kanban.js"></script>
+  <script src="/js/views/settings.js"></script>
+  <script src="/js/views/chatbot.js"></script>
+  <script src="/js/actions.js"></script>
+  <script src="/js/modals.js"></script>
 </body>
 </html>

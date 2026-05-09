@@ -5,7 +5,11 @@
 set -euo pipefail
 
 echo "=== JS Syntax Check ==="
-node -c src/web/app.js && echo "OK" || { echo "FAILED"; exit 1; }
+JS_OK=1
+for f in src/web/js/*.js src/web/js/views/*.js; do
+  node -c "$f" 2>&1 || { echo "FAILED: $f"; JS_OK=0; }
+done
+[ "$JS_OK" -eq 1 ] && echo "All JS OK" || { echo "JS syntax check FAILED"; exit 1; }
 
 echo ""
 echo "=== TypeScript Check ==="

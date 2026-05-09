@@ -140,3 +140,120 @@ test("Queue renders table or empty state after navigation", async ({ page }) => 
   const empty = page.locator(".empty-state");
   await expect(table.or(empty).first()).toBeVisible();
 });
+
+// ── Project persistence ─────────────────────────────────────────
+test("Projects view renders with create button", async ({ page }) => {
+  await page.goto("/");
+  await page.click('button[data-view="projects"]');
+  await expect(page.locator("#view-projects")).toBeVisible();
+  await expect(page.locator("#btn-new-project")).toBeVisible();
+});
+
+test("Create project form has required fields", async ({ page }) => {
+  await page.goto("/");
+  await page.click('button[data-view="projects"]');
+  await page.click("#btn-new-project");
+  await expect(page.locator("#project-modal")).not.toHaveClass(/hidden/);
+  await expect(page.locator("#f-project-name")).toBeVisible();
+  await expect(page.locator("#f-project-path")).toBeVisible();
+  await expect(page.locator("#btn-create-project")).toBeVisible();
+  await expect(page.locator("#btn-cancel-project")).toBeVisible();
+});
+
+test("Create project and verify it appears in list", async ({ page }) => {
+  await page.goto("/");
+  await page.click('button[data-view="projects"]');
+  await page.click("#btn-new-project");
+
+  const projectName = "UI-Project-" + Date.now();
+  await page.fill("#f-project-name", projectName);
+  await page.fill("#f-project-path", "/tmp");
+  await page.click("#btn-create-project");
+
+  // Should show success toast and project should appear
+  await expect(page.locator(".toast.success")).toBeVisible();
+  // Modal should close
+  await expect(page.locator("#project-modal")).toHaveClass(/hidden/);
+  // Project card should appear
+  await expect(page.locator(`.project-card:has-text("${projectName}")`)).toBeVisible();
+});
+
+// ── Kanban ticket persistence ───────────────────────────────────
+test("Kanban renders with column headers", async ({ page }) => {
+  await page.goto("/");
+  await page.click('button[data-view="kanban"]');
+  const cols = ["backlog", "ready", "in-progress", "paused", "testing", "done"];
+  for (const col of cols) {
+    await expect(page.locator(`.kanban-column:has-text("${col}")`)).toBeVisible();
+  }
+});
+
+test("New ticket form opens from kanban", async ({ page }) => {
+  await page.goto("/");
+  await page.click('button[data-view="kanban"]');
+  await page.click("#btn-new-ticket");
+  await expect(page.locator("#ticket-modal")).not.toHaveClass(/hidden/);
+  await expect(page.locator("#t-title")).toBeVisible();
+  await expect(page.locator("#btn-create-ticket")).toBeVisible();
+});
+
+test("Create ticket and verify it appears in backlog", async ({ page }) => {
+  await page.goto("/");
+  await page.click('button[data-view="kanban"]');
+  await page.click("#btn-new-ticket");
+
+  const ticketTitle = "UI-Ticket-" + Date.now();
+  await page.fill("#t-title", ticketTitle);
+  await page.selectOption("#t-column", "backlog");
+  await page.click("#btn-create-ticket");
+
+  // Should see success toast
+  await expect(page.locator(".toast.success")).toBeVisible();
+  // Modal should close
+  await expect(page.locator("#ticket-modal")).toHaveClass(/hidden/);
+  // Ticket should appear in the backlog column's card list
+  await expect(page.locator(`.kanban-card:has-text("${ticketTitle}")`)).toBeVisible();
+});
+
+// ── Prompt submission ───────────────────────────────────────────
+test("Submit prompt navigates to queue with success toast", async ({ page }) => {
+  await page.goto("/");
+  await page.click('button[data-view="submit"]');
+  await page.fill("#f-title", "UI Persist Prompt");
+  await page.fill("#f-prompt", "This is a UI persistence test prompt");
+  await page.click("#btn-submit");
+
+  // Should navigate to queue
+  await expect(page.locator(".queue-filter")).toBeVisible();
+  // Toast should show
+  await expect(page.locator(".toast.success")).toBeVisible();
+});
+
+// ── Chatbot ──────────────────────────────────────────────────────
+test("Chatbot view loads via navigation", async ({ page }) => {
+  await page.goto("/");
+  await page.click('button[data-view="chatbot"]');
+  await expect(page.locator("#view-chatbot")).toBeVisible();
+  await expect(page.locator("#chat-input")).toBeVisible();
+  await expect(page.locator("#btn-chat-send")).toBeVisible();
+});
+
+test("Chatbot shows project selector", async ({ page }) => {
+  await page.goto("/");
+  await page.click('button[data-view="chatbot"]');
+  await expect(page.locator("#chat-project")).toBeVisible();
+});
+
+test("Chatbot has quick action buttons", async ({ page }) => {
+  await page.goto("/");
+  await page.click('button[data-view="chatbot"]');
+  const quickBtns = page.locator(".quick-btn");
+  await expect(quickBtns.first()).toBeVisible();
+  expect(await quickBtns.count()).toBeGreaterThanOrEqual(4);
+});
+
+test("Chatbot shows empty state initially", async ({ page }) => {
+  await page.goto("/");
+  await page.click('button[data-view="chatbot"]');
+  await expect(page.locator(".empty-state")).toBeVisible();
+});

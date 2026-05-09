@@ -153,3 +153,32 @@ export interface TicketCreateInput {
 
 export const TICKET_COLUMNS: TicketColumn[] = ["backlog", "ready", "in-progress", "paused", "testing", "done"];
 export const TICKET_PRIORITIES: TicketPriority[] = ["low", "medium", "high", "critical"];
+
+// ── Chatbot ──────────────────────────────────────────────────────
+
+export interface ChatConversation {
+  id: string;
+  projectId: string;
+  title: string;
+  model: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  conversationId: string;
+  role: "user" | "assistant";
+  content: string;
+  contextFiles: string[];
+  model: string;
+  error: string | null;
+  createdAt: string;
+}
+
+export interface ChatAskInput {
+  conversationId?: string;
+  projectId: string;
+  question: string;
+  model?: string;
+}

@@ -10,14 +10,14 @@ npm run build        # TypeScript → dist/
 npm run check        # tsc --noEmit
 npm test             # Playwright (auto-starts server on port 3469)
 ./scripts/smoke-test.sh [PORT]  # Quick API smoke check (16 tests)
-./scripts/run-all-tests.sh      # Smoke + Playwright (74 tests)
+./scripts/run-all-tests.sh      # Smoke + Playwright (93 tests)
 ```
 
 ## Architecture
 
 ```
 Browser (SSE) → Express server → QueueManager (poll loop) → ClaudeExecutor (spawn claude CLI)
-                              → JobStore + ProjectStore + SessionStore (JSONL)
+                              → JobStore + ProjectStore + TicketStore + SessionStore (JSONL + filesystem)
                               → LogStore (files) + SettingsStore (JSON)
                               → DeepSeekExecutor (HTTP) for prompt improvement
 ```
@@ -29,10 +29,12 @@ Browser (SSE) → Express server → QueueManager (poll loop) → ClaudeExecutor
 - **`src/executor/deepseek.ts`** — HTTP-based executor for DeepSeek/OpenAI-compatible APIs
 - **`src/executor/factory.ts`** — creates executor from AIProvider config
 - **`src/storage/jobs.ts`** — JSONL append + atomic uuid-tmp rewrite
-- **`src/storage/projects.ts`** — JSONL project CRUD (name + rootPath)
+- **`src/storage/projects.ts`** — filesystem-backed project CRUD (dirs under `/srv/dev/sarab/projects/`)
 - **`src/storage/sessions.ts`** — JSONL session store (getLatestForProject, listForProject)
 - **`src/storage/settings.ts`** — JSON settings file with defaults
 - **`src/storage/logs.ts`** — per-job `.log` files
+- **`src/storage/fs-utils.ts`** — filesystem helpers (slugify, safe filenames, project dir scan, `project.json`)
+- **`src/storage/md-serializer.ts`** — markdown serialize/deserialize for tickets and prompts
 - **`src/api/jobs.ts`** — job CRUD, cancel, retry, edit (PATCH), duplicate, detail
 - **`src/api/projects.ts`** — project CRUD, list project jobs/sessions
 - **`src/api/sessions.ts`** — list sessions, get latest per project
@@ -45,8 +47,9 @@ Browser (SSE) → Express server → QueueManager (poll loop) → ClaudeExecutor
 | Feature | Files |
 |---------|-------|
 | Job lifecycle | `queue/manager.ts`, `executor/claude.ts` |
-| Projects & sessions | `storage/projects.ts`, `storage/sessions.ts`, `api/projects.ts`, `api/sessions.ts` |
+| Projects & sessions | `storage/projects.ts`, `storage/sessions.ts`, `api/projects.ts`, `api/sessions.ts`, `storage/fs-utils.ts` |
 | Settings & providers | `storage/settings.ts`, `api/settings.ts`, `executor/factory.ts` |
+| Tickets & Kanban | `storage/tickets.ts`, `api/tickets.ts`, `storage/md-serializer.ts` |
 | API endpoints | `api/router.ts` + `api/jobs.ts` or `api/queue.ts` or `api/prompt.ts` |
 | Storage format | `storage/jobs.ts`, `queue/types.ts` |
 | Frontend UI | `web/app.js` (state + views), `web/styles.css`, `web/index.html` |
@@ -84,6 +87,7 @@ When `projectId` is set, the executor runs with `cwd = project.rootPath`.
 
 ## Known pitfalls
 
+- **Filesystem persistence**: Projects are stored as directories under `/srv/dev/sarab/projects/[slug]/` with `project.json` metadata. Tickets and prompts persist as markdown files in each project's subdirectories. JSONL files in `data/` provide secondary caching. See [Persistence Architecture](#persistence-architecture) below.
 - **JSONL storage**: `JobStore.list()` reads entire file per call — fine for <1000 jobs, degrades linearly. No DB.
 - **Single-threaded queue**: Only one Claude invocation at a time.
 - **Port in tests**: Smoke tests must pass PORT via env: `env PORT=XXXX npx tsx src/server.ts`. The config reads `process.env.PORT`, not CLI args.
@@ -95,11 +99,113 @@ When `projectId` is set, the executor runs with `cwd = project.rootPath`.
 - **TS syntax in JS**: Do NOT use `: any` or other TypeScript annotations in `web/app.js`. It's plain JS served as static file.
 - **Settings**: Default provider cannot be deleted. At least one provider must exist (defaults created on first load).
 
+## Persistence architecture
+
+### Project storage
+
+Projects live as directories under `/srv/dev/sarab/projects/`:
+
+```
+/srv/dev/sarab/projects/
+  ├── my-project/           # slugified project name
+  │   ├── project.json      # { id, name, rootPath, createdAt, updatedAt, settings }
+  │   ├── tickets/
+  │   │   └── backlog/
+  │   │       └── my-ticket-xxxxxxxx.md
+  │   └── prompts/
+  │       └── my-prompt-xxxxxxxx.md
+  └── another-project/
+      └── project.json
+```
+
+- **`ProjectStore`** scans `/srv/dev/sarab/projects/` on every `list()` — directories with valid `project.json` become projects. No volatile-only state.
+- **`create()`** validates name (no path traversal, no empty), slugifies it, creates dir + `project.json`. Returns `400` with clear message on duplicate.
+- **`update()`** renames directory if name changes (via `renameSync`).
+- **`delete()`** recursively removes the project directory.
+
+### Ticket markdown format
+
+Stored under `projects/[slug]/tickets/backlog/[safe-title]-[8char-id].md`:
+
+```md
+Title: Fix login button
+Kanban Status: backlog
+Priority: high
+Project: abc12345
+Job: 
+Session: 
+Tags: bug, ui
+Created: 2026-05-09T12:00:00.000Z
+Updated: 2026-05-09T12:00:00.000Z
+Started: 
+Paused: 
+Done: 
+Ticket ID: abc12345
+========================================
+Content:
+The login button doesn't work on mobile.
+```
+
+- **`TicketStore`** loads from both `data/tickets.jsonl` (cache) AND markdown files on startup (`loadFromMarkdown()`). Malformed files are skipped with a warning.
+- On create/update, markdown is written immediately via `writeMarkdown()`.
+- On delete, the corresponding markdown file is removed.
+
+### Prompt markdown format
+
+Stored under `projects/[slug]/prompts/[safe-title]-[8char-id].md`:
+
+```md
+Title: Upgrade all dependencies
+Model: claude-sonnet-4-6
+Project: abc12345
+Session: cls_abc123
+Session Mode: resume
+Execution Mode: api
+Tags: refactor, urgent
+Status: completed
+Attempt: 1 / 3
+Created: 2026-05-09T09:00:00.000Z
+Started: 2026-05-09T09:01:00.000Z
+Completed: 2026-05-09T09:15:00.000Z
+Error: none
+Exit Code: 0
+Job ID: xyz12345
+========================================
+Content:
+Please upgrade all npm dependencies...
+```
+
+- **`JobStore`** loads from both `data/jobs.jsonl` (cache) AND markdown files on startup.
+- Prompts only get markdown files when `projectId` is set (project-linked jobs).
+
+### Key modules
+
+| File | Responsibility |
+|------|---------------|
+| `storage/fs-utils.ts` | Filesystem ops: slugify, safe filenames, project dir scan, `project.json` read/write |
+| `storage/md-serializer.ts` | Markdown serialization/deserialization for tickets and prompts |
+| `storage/projects.ts` | Project CRUD backed by filesystem directories |
+| `storage/tickets.ts` | Ticket CRUD backed by JSONL cache + markdown files |
+| `storage/jobs.ts` | Job CRUD backed by JSONL cache + markdown files for prompts |
+
+### Error handling rules
+
+- Malformed markdown files → skipped with `logger.warn()`, never crash.
+- Path traversal in project names → `ValidationError` (400), caught by `validateProjectName()`.
+- Duplicate project directory → `ValidationError` with `"Project folder already exists: [slug]"`.
+- Project name with only special chars → `ValidationError` from slugify producing empty result.
+
+### Migration from old volatile state
+
+- The old JSONL files (`data/projects.jsonl`, `data/tickets.jsonl`, `data/jobs.jsonl`) are kept as secondary cache.
+- Projects created before this change that don't have a corresponding directory under `/srv/dev/sarab/projects/` are NOT visible — only filesystem-backed projects appear.
+- To migrate existing projects: create the directory manually with a `project.json` file.
+
 ## Testing workflow
 
 1. `npx tsc --noEmit` — type check
 2. `./scripts/smoke-test.sh` — 16 API checks (~10s)
-3. `npx playwright test` — 53 fast + 5 slow browser+API tests (~5s + 19s)
+3. `npx playwright test` — 93 tests (~1.3min with 1 worker)
 4. Or run both: `./scripts/run-all-tests.sh`
 
 Tests auto-start the dev server via Playwright's `webServer` config (port 3469).
