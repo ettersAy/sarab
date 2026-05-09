@@ -81,6 +81,7 @@ export interface Project {
   id: string;
   name: string;
   rootPath: string;
+  repoUrl?: string;
   createdAt: string;
   updatedAt: string;
   settings?: ProjectSettings;
@@ -88,7 +89,8 @@ export interface Project {
 
 export interface ProjectCreateInput {
   name: string;
-  rootPath: string;
+  rootPath?: string;
+  repoUrl?: string;
   settings?: ProjectSettings;
 }
 

@@ -49,12 +49,22 @@
     tickets/backlog/
     prompts/</code></pre>
 
+<h3>Project Creation: Local Path vs GitHub Clone</h3>
+<p>Projects support two creation modes:</p>
+<table>
+  <tr><th>Mode</th><th>rootPath</th><th>Behavior</th></tr>
+  <tr><td><strong>Local</strong></td><td>Required</td><td>Must point to an existing directory. Validation fails if path doesn't exist.</td></tr>
+  <tr><td><strong>GitHub</strong></td><td>Optional</td><td>Clones repo via <code>git clone --depth 1</code> to auto-generated path (<code>/srv/dev/sarab/repos/[name]</code>). Can override with custom rootPath.</td></tr>
+</table>
+<p>When <code>repoUrl</code> is set, the git service (<code>src/services/git.ts</code>) validates the URL (blocks command injection), extracts the repo name, and clones it. URL validation only allows <code>github.com</code>, <code>gitlab.com</code>, and <code>bitbucket.org</code> HTTPS URLs.</p>
+
 <h3>project.json</h3>
 <p>Each project directory contains a <code>project.json</code> with metadata:</p>
 <pre><code>{
   "id": "a1b2c3d4",
   "name": "My Project",
-  "rootPath": "/home/user/my-project",
+  "rootPath": "/srv/dev/sarab/repos/my-project",
+  "repoUrl": "https://github.com/user/my-project.git",
   "createdAt": "2026-05-09T12:00:00.000Z",
   "updatedAt": "2026-05-09T14:30:00.000Z",
   "settings": {

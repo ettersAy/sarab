@@ -14,6 +14,7 @@ import {
   readProjectMeta,
   deleteProjectDir,
 } from "./fs-utils.js";
+import { validateGitUrl, repoNameFromUrl, cloneRepo } from "../services/git.js";
 
 export class ProjectStore {
   private projectsRoot: string;
@@ -34,13 +35,35 @@ export class ProjectStore {
     return this.list().find((p) => p.id === id);
   }
 
-  create(input: ProjectCreateInput): Project {
+  async create(input: ProjectCreateInput): Promise<Project> {
     const name = validateProjectName(input.name);
-    if (!input.rootPath || typeof input.rootPath !== "string" || input.rootPath.trim().length === 0) {
-      throw new ValidationError("Root path is required");
-    }
-    if (!existsSync(input.rootPath) || !statSync(input.rootPath).isDirectory()) {
-      throw new ValidationError(`Root path does not exist or is not a directory: ${input.rootPath}`);
+    let rootPath = input.rootPath?.trim();
+    let repoUrl = input.repoUrl?.trim();
+
+    // Git clone mode: validate URL, auto-generate path, clone
+    if (repoUrl) {
+      repoUrl = validateGitUrl(repoUrl);
+      const repoName = repoNameFromUrl(repoUrl);
+
+      if (!rootPath) {
+        rootPath = `/srv/dev/sarab/repos/${repoName}`;
+      }
+      if (existsSync(rootPath)) {
+        throw new ValidationError(`Target path already exists: ${rootPath}`);
+      }
+
+      const cloneResult = await cloneRepo(repoUrl, rootPath);
+      if (!cloneResult.success) {
+        throw new ValidationError(`Git clone failed: ${cloneResult.error}`);
+      }
+    } else {
+      // Local path mode: validate directory exists
+      if (!rootPath || rootPath.length === 0) {
+        throw new ValidationError("Root path is required (or provide a GitHub URL)");
+      }
+      if (!existsSync(rootPath) || !statSync(rootPath).isDirectory()) {
+        throw new ValidationError(`Root path does not exist or is not a directory: ${rootPath}`);
+      }
     }
 
     const slug = slugify(name);
@@ -55,7 +78,8 @@ export class ProjectStore {
     const project: Project = {
       id: uuid().slice(0, 8),
       name,
-      rootPath: input.rootPath.trim(),
+      rootPath: rootPath!,
+      repoUrl: repoUrl || undefined,
       createdAt: now,
       updatedAt: now,
       settings: input.settings,
@@ -63,7 +87,7 @@ export class ProjectStore {
 
     mkdirSync(dir, { recursive: true });
     writeProjectMeta(slug, project as unknown as Record<string, unknown>);
-    logger.info(`Project created: ${project.id} — "${project.name}" (dir: ${slug})`);
+    logger.info(`Project created: ${project.id} — "${project.name}" (dir: ${slug})${repoUrl ? ` [git]` : ""}`);
     return project;
   }
 
@@ -114,6 +138,7 @@ function metaToProject(slug: string, meta: Record<string, unknown> | null): Proj
     id: meta.id as string,
     name: meta.name as string,
     rootPath: meta.rootPath as string,
+    repoUrl: meta.repoUrl as string | undefined,
     createdAt: meta.createdAt as string,
     updatedAt: meta.updatedAt as string,
     settings: meta.settings as Project["settings"],

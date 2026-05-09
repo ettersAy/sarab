@@ -178,6 +178,25 @@ test("Create project and verify it appears in list", async ({ page }) => {
   await expect(page.locator(`.project-card:has-text("${projectName}")`)).toBeVisible();
 });
 
+test("New project form has source toggle (local/github)", async ({ page }) => {
+  await page.goto("/");
+  await page.click('button[data-view="projects"]');
+  await page.click("#btn-new-project");
+  await expect(page.locator("#f-project-source")).toBeVisible();
+  await expect(page.locator("#f-local-fields")).toBeVisible();
+  await expect(page.locator("#f-github-fields")).toHaveClass(/hidden/);
+});
+
+test("New project form shows GitHub fields when toggled", async ({ page }) => {
+  await page.goto("/");
+  await page.click('button[data-view="projects"]');
+  await page.click("#btn-new-project");
+  await page.selectOption("#f-project-source", "github");
+  await expect(page.locator("#f-local-fields")).toHaveClass(/hidden/);
+  await expect(page.locator("#f-github-fields")).not.toHaveClass(/hidden/);
+  await expect(page.locator("#f-project-repo")).toBeVisible();
+});
+
 // ── Kanban ticket persistence ───────────────────────────────────
 test("Kanban renders with column headers", async ({ page }) => {
   await page.goto("/");

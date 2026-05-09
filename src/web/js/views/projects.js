@@ -68,9 +68,30 @@ function showProjectForm() {
         <input id="f-project-name" type="text" placeholder="e.g. my-app" required maxlength="100">
       </div>
       <div class="form-group">
-        <label>Root Path</label>
-        <input id="f-project-path" type="text" placeholder="e.g. /home/user/projects/my-app" required>
-        <div class="hint">Claude commands will run from this directory.</div>
+        <label>Source</label>
+        <select id="f-project-source" style="width:100%;background:var(--bg-tertiary);border:1px solid var(--border);border-radius:6px;padding:8px 12px;color:var(--text);font-size:13px;font-family:var(--font)">
+          <option value="local">Local Directory</option>
+          <option value="github">GitHub Repository</option>
+        </select>
+      </div>
+      <div id="f-local-fields">
+        <div class="form-group">
+          <label>Root Path</label>
+          <input id="f-project-path" type="text" placeholder="e.g. /home/user/projects/my-app" required>
+          <div class="hint">Claude commands will run from this directory.</div>
+        </div>
+      </div>
+      <div id="f-github-fields" class="hidden">
+        <div class="form-group">
+          <label>GitHub URL</label>
+          <input id="f-project-repo" type="text" placeholder="https://github.com/user/repo.git" required>
+          <div class="hint">The repo will be cloned automatically. Local path is auto-generated.</div>
+        </div>
+        <div class="form-group">
+          <label>Local Path (optional)</label>
+          <input id="f-project-path-gh" type="text" placeholder="Leave blank for auto: /srv/dev/sarab/repos/[repo-name]">
+          <div class="hint">Override the auto-generated clone destination.</div>
+        </div>
       </div>
       <div class="form-actions">
         <button class="btn btn-primary btn-sm" id="btn-create-project">Create</button>
@@ -80,12 +101,32 @@ function showProjectForm() {
 
   modal.classList.remove("hidden");
 
+  // Toggle between local and GitHub modes
+  document.getElementById("f-project-source")?.addEventListener("change", (e) => {
+    const isGithub = e.target.value === "github";
+    document.getElementById("f-local-fields").classList.toggle("hidden", isGithub);
+    document.getElementById("f-github-fields").classList.toggle("hidden", !isGithub);
+  });
+
   document.getElementById("btn-create-project")?.addEventListener("click", async () => {
     const name = document.getElementById("f-project-name").value.trim();
-    const rootPath = document.getElementById("f-project-path").value.trim();
-    if (!name || !rootPath) { showToast("Name and root path are required", "error"); return; }
+    if (!name) { showToast("Name is required", "error"); return; }
+    const source = document.getElementById("f-project-source").value;
+    const body = { name };
+
+    if (source === "github") {
+      body.repoUrl = document.getElementById("f-project-repo").value.trim();
+      if (!body.repoUrl) { showToast("GitHub URL is required", "error"); return; }
+      const ghPath = document.getElementById("f-project-path-gh").value.trim();
+      if (ghPath) body.rootPath = ghPath;
+    } else {
+      body.rootPath = document.getElementById("f-project-path").value.trim();
+      if (!body.rootPath) { showToast("Root path is required", "error"); return; }
+    }
+
     try {
-      await api("POST", "/api/projects", { name, rootPath });
+      showToast("Creating project...", "success");
+      await api("POST", "/api/projects", body);
       await loadProjects();
       renderProjects();
       modal.classList.add("hidden");

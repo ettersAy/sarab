@@ -17,9 +17,13 @@ export function createProjectsRouter(
     res.json(projects);
   });
 
-  router.post("/", (req, res) => {
-    const project = projectStore.create(req.body);
-    res.status(201).json(project);
+  router.post("/", async (req, res, next) => {
+    try {
+      const project = await projectStore.create(req.body);
+      res.status(201).json(project);
+    } catch (err) {
+      next(err);
+    }
   });
 
   router.get("/:id", (req, res) => {
