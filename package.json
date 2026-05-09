@@ -13,7 +13,8 @@
     "smoke": "./scripts/smoke-test.sh",
     "start-server": "./scripts/SarabWakeUp",
     "stop-server": "./scripts/SarabSleep",
-    "health": "./scripts/sarabHealth"
+    "health": "./scripts/sarabHealth",
+    "test:unit": "node --import tsx --test tests/unit/*.test.ts"
   },
   "dependencies": {
     "express": "^4.21.0",

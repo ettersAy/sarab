@@ -140,6 +140,30 @@ async function loadSessionsForProject(projectId) {
   }
 }
 
+function showUndoPromptButton(textarea) {
+  // Remove any existing undo button
+  document.getElementById("btn-undo-prompt")?.remove();
+  const btn = document.createElement("button");
+  btn.id = "btn-undo-prompt";
+  btn.type = "button";
+  btn.className = "btn btn-sm";
+  btn.textContent = "Undo";
+  btn.style.cssText = "margin-left:8px;background:var(--bg-tertiary);border:1px solid var(--orange);color:var(--orange)";
+  btn.addEventListener("click", () => {
+    const original = textarea.getAttribute("data-original");
+    if (original) {
+      textarea.value = original;
+      textarea.style.height = "auto";
+      textarea.style.height = textarea.scrollHeight + "px";
+      textarea.removeAttribute("data-original");
+      btn.remove();
+      showToast("Reverted to original", "success");
+    }
+  });
+  const actionsBar = document.getElementById("prompt-actions");
+  actionsBar?.appendChild(btn);
+}
+
 async function handlePromptAction(e) {
   const btn = e.target.closest(".action-btn");
   if (!btn || btn.disabled) return;
@@ -162,10 +186,13 @@ async function handlePromptAction(e) {
 
   try {
     const data = await api("POST", "/api/prompt/improve", { prompt, action });
+    // Stash original for undo
+    textarea.setAttribute("data-original", textarea.value);
     textarea.value = data.result;
     textarea.style.height = "auto";
     textarea.style.height = textarea.scrollHeight + "px";
-    showToast(`Prompt ${action}ed successfully`, "success");
+    showUndoPromptButton(textarea);
+    showToast(`Prompt ${action}ed — click Undo to revert`, "success");
   } catch (err) {
     showToast(err.message, "error");
   } finally {

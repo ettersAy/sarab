@@ -55,11 +55,15 @@ function renderKanban() {
 
 function renderTicketCard(t) {
   const prioClass = `prio-${t.priority}`;
+  const subtickets = tickets.filter((st) => st.parentId === t.id);
+  const subCount = subtickets.length;
   return `
     <div class="kanban-card ${prioClass}" data-id="${t.id}" draggable="true">
       <div class="kanban-card-title">${h(t.title)}</div>
       ${t.description ? `<div class="kanban-card-desc">${h(t.description.slice(0, 100))}${t.description.length > 100 ? "..." : ""}</div>` : ""}
       <div class="kanban-card-meta">
+        ${t.parentId ? `<span class="tag" style="background:var(--purple);color:white">Child</span>` : ""}
+        ${subCount > 0 ? `<span class="tag" style="background:var(--accent-dim);color:white">${subCount} sub</span>` : ""}
         ${t.tags?.length ? t.tags.map((tag) => `<span class="tag">${h(tag)}</span>`).join("") : ""}
         ${t.jobId ? `<span class="tag" style="background:var(--accent-dim);color:white">Job: ${t.jobId}</span>` : ""}
       </div>
@@ -67,8 +71,21 @@ function renderTicketCard(t) {
         <button class="btn btn-sm" data-action="move-ticket" data-id="${t.id}">Move</button>
         <button class="btn btn-sm" data-action="edit-ticket" data-id="${t.id}">Edit</button>
         <button class="btn btn-sm" data-action="run-ticket" data-id="${t.id}">Run</button>
+        <button class="btn btn-sm" data-action="subticket" data-id="${t.id}" title="Add subticket">+Sub</button>
         <button class="btn btn-danger btn-sm" data-action="delete-ticket" data-id="${t.id}">Del</button>
       </div>
+      ${subCount > 0 ? `<div style="margin-top:6px;padding-left:8px;border-left:2px solid var(--accent-dim)">${subtickets.map((st) => `
+        <div class="kanban-card" style="font-size:11px;padding:6px 8px;margin-bottom:4px" data-id="${st.id}" draggable="true">
+          <div class="kanban-card-title" style="font-size:11px">${h(st.title)}</div>
+          <div class="kanban-card-meta">
+            ${st.tags?.length ? st.tags.map((tag) => `<span class="tag" style="font-size:10px">${h(tag)}</span>`).join("") : ""}
+          </div>
+          <div class="kanban-card-actions" style="margin-top:3px">
+            <button class="btn btn-sm" data-action="move-ticket" data-id="${st.id}" style="font-size:10px;padding:1px 4px">Move</button>
+            <button class="btn btn-sm" data-action="edit-ticket" data-id="${st.id}" style="font-size:10px;padding:1px 4px">Edit</button>
+            <button class="btn btn-danger btn-sm" data-action="delete-ticket" data-id="${st.id}" style="font-size:10px;padding:1px 4px">Del</button>
+          </div>
+        </div>`).join("")}</div>` : ""}
     </div>`;
 }
 
@@ -96,6 +113,9 @@ function bindTicketActions() {
         renderKanban();
       } catch (err) { showToast(err.message, "error"); }
     });
+  });
+  document.querySelectorAll("[data-action=subticket]").forEach((btn) => {
+    btn.addEventListener("click", () => showSubticketForm(btn.dataset.id));
   });
   document.querySelectorAll("[data-action=delete-ticket]").forEach((btn) => {
     btn.addEventListener("click", async () => {
@@ -159,6 +179,69 @@ function bindKanbanDrag() {
         showToast(`Moved to ${targetColumn}`, "success");
       } catch (err) { showToast(err.message, "error"); }
     });
+  });
+}
+
+function showSubticketForm(parentId) {
+  const t = tickets.find((x) => x.id === parentId);
+  if (!t) return;
+  const modal = document.getElementById("ticket-modal");
+  document.getElementById("ticket-modal-title").textContent = "Add Subticket to: " + t.title;
+  document.getElementById("ticket-modal-body").innerHTML = `
+    <div class="form-container">
+      <div class="form-group">
+        <label>Title</label>
+        <input id="t-title" type="text" placeholder="Subticket title" required maxlength="200">
+      </div>
+      <div class="form-group">
+        <label>Description</label>
+        <textarea id="t-desc" placeholder="Optional description" style="min-height:60px;font-family:var(--mono);font-size:12px"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label>Priority</label>
+          <select id="t-priority">
+            <option value="medium">medium</option>
+            <option value="low">low</option>
+            <option value="high">high</option>
+            <option value="critical">critical</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>Tags</label>
+          <input id="t-tags" type="text" placeholder="e.g. bug, feature">
+        </div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary btn-sm" id="btn-create-ticket">Create Subticket</button>
+        <button class="btn btn-sm" id="btn-cancel-ticket">Cancel</button>
+      </div>
+    </div>`;
+
+  modal.classList.remove("hidden");
+
+  document.getElementById("btn-create-ticket")?.addEventListener("click", async () => {
+    const title = document.getElementById("t-title").value.trim();
+    if (!title) { showToast("Title is required", "error"); return; }
+    const tags = document.getElementById("t-tags").value.split(",").map((s) => s.trim()).filter(Boolean);
+    try {
+      await api("POST", "/api/tickets", {
+        title,
+        description: document.getElementById("t-desc").value.trim(),
+        column: t.column,
+        priority: document.getElementById("t-priority").value,
+        projectId: t.projectId || undefined,
+        parentId,
+        tags,
+      });
+      await loadTickets();
+      renderKanban();
+      modal.classList.add("hidden");
+      showToast("Subticket created", "success");
+    } catch (err) { showToast(err.message, "error"); }
+  });
+  document.getElementById("btn-cancel-ticket")?.addEventListener("click", () => {
+    modal.classList.add("hidden");
   });
 }
 

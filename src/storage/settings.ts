@@ -1,6 +1,7 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from "node:fs";
 import { join } from "node:path";
 import type { AppSettings } from "../queue/types.js";
+import { logger } from "../logger.js";
 
 const DEFAULT_SETTINGS: AppSettings = {
   providers: [
@@ -42,7 +43,7 @@ export class SettingsStore {
       const raw = readFileSync(this.filePath, "utf-8");
       const saved = JSON.parse(raw);
       // Deep-merge executionDefaults so new defaults fill missing keys
-      return {
+      const settings: AppSettings = {
         ...DEFAULT_SETTINGS,
         ...saved,
         executionDefaults: {
@@ -54,6 +55,14 @@ export class SettingsStore {
           ...(saved.promptImprovement || {}),
         },
       };
+      // Fallback: if defaultProviderId is stale, reset to first enabled provider
+      if (settings.providers.length > 0 && !settings.providers.find((p) => p.id === settings.defaultProviderId)) {
+        const fallback = settings.providers.find((p) => p.enabled !== false) ?? settings.providers[0];
+        settings.defaultProviderId = fallback.id;
+        fallback.isDefault = true;
+        logger.warn(`defaultProviderId was stale — reset to ${fallback.id}`);
+      }
+      return settings;
     } catch {
       return { ...DEFAULT_SETTINGS };
     }

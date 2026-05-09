@@ -179,6 +179,7 @@ export class TicketStore {
       column: ticket.column,
       priority: ticket.priority,
       projectId: ticket.projectId,
+      parentId: ticket.parentId,
       jobId: ticket.jobId,
       sessionId: ticket.sessionId,
       tags: ticket.tags,

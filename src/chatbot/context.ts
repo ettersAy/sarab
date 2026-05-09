@@ -64,12 +64,21 @@ export function buildChatPrompt(
   context: ContextResult,
   projectName: string,
   systemPrompt?: string,
+  history?: { role: string; content: string }[],
 ): string {
   const base = systemPrompt?.trim() ||
     "You are a helpful AI assistant answering questions about the project. Use the provided project context files to give accurate, specific answers. Be concise and direct.";
 
   let prompt = `${base}\n\n`;
   prompt += `Project: ${projectName}\n\n`;
+
+  // Include conversation history
+  if (history && history.length > 0) {
+    prompt += "## Conversation History\n\n";
+    for (const msg of history) {
+      prompt += `**${msg.role === "user" ? "User" : "Assistant"}**: ${msg.content}\n\n`;
+    }
+  }
 
   if (context.files.length > 0) {
     prompt += "## Project Context\n\n";
@@ -85,8 +94,8 @@ export function buildChatPrompt(
     }
   }
 
-  prompt += `## Question\n${question}\n\n`;
-  prompt += "Provide a clear, helpful answer based on the project context above.";
+  prompt += `## Current Question\n${question}\n\n`;
+  prompt += "Provide a clear, helpful answer based on the project context and conversation history above.";
 
   return prompt;
 }

@@ -4,6 +4,23 @@ import { logger } from "../logger.js";
 
 const SESSION_ID_RE = /Session ID: (cls_\w+)/;
 
+function killProcessGroup(proc: ChildProcess): void {
+  if (!proc.pid) return;
+  try {
+    process.kill(-proc.pid, "SIGTERM");
+  } catch {
+    // Fallback if not a process group leader
+    proc.kill("SIGTERM");
+  }
+  setTimeout(() => {
+    try {
+      process.kill(-proc.pid!, "SIGKILL");
+    } catch {
+      proc.kill("SIGKILL");
+    }
+  }, 10_000);
+}
+
 export class ClaudeExecutor implements Executor {
   private currentProcess: ChildProcess | null = null;
   private killed = false;
@@ -16,12 +33,7 @@ export class ClaudeExecutor implements Executor {
   kill(): void {
     this.killed = true;
     if (this.currentProcess && !this.currentProcess.killed) {
-      this.currentProcess.kill("SIGTERM");
-      setTimeout(() => {
-        if (this.currentProcess && !this.currentProcess.killed) {
-          this.currentProcess.kill("SIGKILL");
-        }
-      }, 10_000);
+      killProcessGroup(this.currentProcess);
     }
   }
 
@@ -58,12 +70,7 @@ export class ClaudeExecutor implements Executor {
         hardTimer = setTimeout(() => {
           timedOut = true;
           logger.warn(`Hard timeout (${input.timeoutMs}ms) reached, killing...`);
-          this.currentProcess?.kill("SIGTERM");
-          setTimeout(() => {
-            if (this.currentProcess && !this.currentProcess.killed) {
-              this.currentProcess.kill("SIGKILL");
-            }
-          }, 10_000);
+          if (this.currentProcess) killProcessGroup(this.currentProcess);
         }, input.timeoutMs);
       }
 
@@ -74,12 +81,7 @@ export class ClaudeExecutor implements Executor {
           idleTimer = setTimeout(() => {
             idleTimedOut = true;
             logger.warn(`Idle timeout (${input.idleTimeoutMs}ms) — no output, killing...`);
-            this.currentProcess?.kill("SIGTERM");
-            setTimeout(() => {
-              if (this.currentProcess && !this.currentProcess.killed) {
-                this.currentProcess.kill("SIGKILL");
-              }
-            }, 10_000);
+            if (this.currentProcess) killProcessGroup(this.currentProcess);
           }, input.idleTimeoutMs);
         }
       };

@@ -61,7 +61,6 @@ export function createChatbotRouter(
 
       // Build the full prompt
       const systemPrompt = project.settings?.templates?.reflection || undefined;
-      const fullPrompt = buildChatPrompt(question.trim(), ctx, project.name, systemPrompt);
 
       // Get or create conversation
       let convId = conversationId;
@@ -73,6 +72,13 @@ export function createChatbotRouter(
         const conv = chatStore.getConversation(convId);
         if (!conv) throw new NotFoundError("Conversation", convId);
       }
+
+      // Fetch prior messages for multi-turn context
+      const priorMessages = chatStore.getMessages(convId);
+      const history = priorMessages.map((m) => ({ role: m.role, content: m.content }));
+
+      // Rebuild prompt with conversation history
+      const fullPrompt = buildChatPrompt(question.trim(), ctx, project.name, systemPrompt, history);
 
       // Store user message
       chatStore.addMessage({

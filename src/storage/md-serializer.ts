@@ -5,6 +5,7 @@ export interface TicketMdMeta {
   column: string;
   priority: string;
   projectId?: string;
+  parentId?: string;
   jobId?: string;
   sessionId?: string;
   tags: string[];
@@ -21,6 +22,7 @@ export function serializeTicketMd(id: string, meta: TicketMdMeta, description: s
     `Kanban Status: ${meta.column}`,
     `Priority: ${meta.priority}`,
     `Project: ${meta.projectId || ""}`,
+    `Parent: ${meta.parentId || ""}`,
     `Job: ${meta.jobId || ""}`,
     `Session: ${meta.sessionId || ""}`,
     `Tags: ${meta.tags.join(", ")}`,
@@ -68,6 +70,7 @@ export function deserializeTicketMd(content: string): { meta: TicketMdMeta; desc
         column: meta["Kanban Status"] || "backlog",
         priority: meta["Priority"] || "medium",
         projectId: meta["Project"] || undefined,
+        parentId: meta["Parent"] || undefined,
         jobId: meta["Job"] || undefined,
         sessionId: meta["Session"] || undefined,
         tags: meta["Tags"] ? meta["Tags"].split(",").map((s) => s.trim()).filter(Boolean) : [],

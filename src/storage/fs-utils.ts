@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readdirSync, rmdirSync, statSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, rmdirSync, renameSync, statSync, readFileSync, writeFileSync, unlinkSync } from "node:fs";
 import { join } from "node:path";
 import { ValidationError } from "../errors.js";
 
@@ -82,7 +82,10 @@ export function scanProjectDirs(): { name: string; slug: string; path: string }[
 export function writeProjectMeta(slug: string, meta: Record<string, unknown>): void {
   const dir = join(getProjectsRoot(), slug);
   mkdirSync(dir, { recursive: true });
-  writeFileSync(join(dir, "project.json"), JSON.stringify(meta, null, 2));
+  const target = join(dir, "project.json");
+  const tmp = `${target}.tmp`;
+  writeFileSync(tmp, JSON.stringify(meta, null, 2));
+  renameSync(tmp, target);
 }
 
 export function readProjectMeta(slug: string): Record<string, unknown> | null {

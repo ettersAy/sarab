@@ -12,7 +12,14 @@ export function createSettingsRouter(settingsStore: SettingsStore): Router {
   });
 
   router.put("/", (req, res) => {
-    settingsStore.save(req.body);
+    const body = req.body;
+    // Validate defaultProviderId is in providers
+    if (body.providers && Array.isArray(body.providers) && body.providers.length > 0) {
+      if (body.defaultProviderId && !body.providers.find((p: any) => p.id === body.defaultProviderId)) {
+        throw new ValidationError(`defaultProviderId '${body.defaultProviderId}' not found in providers`);
+      }
+    }
+    settingsStore.save(body);
     res.json(settingsStore.load());
   });
 

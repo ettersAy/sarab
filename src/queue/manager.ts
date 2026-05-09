@@ -158,7 +158,10 @@ export class QueueManager extends EventEmitter {
       const job = this.jobStore.getNextPending();
       if (!job) break;
       this.activeJobs.add(job.id);
-      started.push(this.processJob(job));
+      started.push(this.processJob(job).catch((err) => {
+        logger.error(`processJob crashed for ${job.id}: ${err instanceof Error ? err.message : String(err)}`);
+        this.activeJobs.delete(job.id);
+      }));
     }
 
     // Schedule next poll regardless of job completion
@@ -239,7 +242,25 @@ export class QueueManager extends EventEmitter {
         }
       }
 
-      const result = await this.executor.execute(execInput);
+      let result;
+      try {
+        result = await this.executor.execute(execInput);
+      } catch (err: unknown) {
+        const msg = err instanceof Error ? err.message : String(err);
+        logger.error(`Executor threw for job ${job.id}: ${msg}`);
+        this.jobStore.update(job.id, {
+          status: "failed",
+          exitCode: -1,
+          error: `Executor error: ${msg}`,
+          attempt,
+          completedAt: new Date().toISOString(),
+          logFile: this.logStore.getPath(job.id),
+        });
+        const failedJob = this.jobStore.get(job.id)!;
+        this.emit("job-failed", { type: "job-failed", job: failedJob });
+        this.activeJobs.delete(job.id);
+        return;
+      }
 
       lastOutput = result.stdout + (result.stderr ? "\n[STDERR]\n" + result.stderr : "");
 

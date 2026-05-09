@@ -30,12 +30,18 @@ const $label = document.getElementById("queue-label");
 
 // ── SSE ─────────────────────────────────────────────────────────
 let sseConnected = false;
+let sseWasDisconnected = false;
 
 function initSSE() {
   const es = new EventSource("/api/events");
   es.onopen = () => {
     sseConnected = true;
     updateIndicator();
+    if (sseWasDisconnected) {
+      sseWasDisconnected = false;
+      loadJobs().catch(() => {});
+      loadTickets().catch(() => {});
+    }
   };
   es.onmessage = (e) => {
     try {
@@ -45,6 +51,7 @@ function initSSE() {
   };
   es.onerror = () => {
     sseConnected = false;
+    sseWasDisconnected = true;
     updateIndicator();
   };
 }
@@ -188,11 +195,27 @@ function fmtTime(iso) {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
 }
 
+// ── Error boundary ──────────────────────────────────────────────
+window.addEventListener("unhandledrejection", (event) => {
+  const msg = event.reason instanceof Error ? event.reason.message : String(event.reason);
+  console.error("Unhandled rejection:", msg);
+  showToast("Something went wrong: " + msg, "error");
+});
+
 // ── Init ────────────────────────────────────────────────────────
 async function init() {
   initSSE();
-  await Promise.all([loadJobs(), loadProjects(), loadTickets()]);
-  renderView();
+  try {
+    await Promise.all([loadJobs(), loadProjects(), loadTickets()]);
+  } catch (err) {
+    showToast("Failed to load initial data: " + (err.message || err), "error");
+  }
+  try {
+    renderView();
+  } catch (err) {
+    $main.innerHTML = `<div class="empty-state"><p style="color:var(--red)">Failed to render view. Check console for details.</p></div>`;
+    console.error("renderView error:", err);
+  }
 }
 
 document.addEventListener("DOMContentLoaded", init);
