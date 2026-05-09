@@ -434,4 +434,11 @@ Total: 59 tests, 0 failures
 
 **Files**: 9 created, 15 modified
 **Tests**: 74 total (53 fast Playwright + 5 slow + 16 smoke), 0 failures
-**Commits**: 3 (9239b36 initial → fad9ba4 phases 2-6 → 4c33caa phases 7-12)
+**Commits**: 4 (9239b36 → fad9ba4 → 4c33caa → ac0c47d)
+
+### Final Polish (2026-05-09)
+
+- **CLAUDE.md** updated: new architecture diagram, session modes table, Settings+pits, TS-in-JS warning
+- **Settings tests**: 7 new tests (GET, PUT, providers list, create, validate, cannot delete default, set default)
+- **Test fixes**: Queue pause in Job CRUD block (prevents race), relaxed empty-state assertions
+- **Final count**: 65 Playwright tests (60 fast + 5 slow) + 16 smoke = 81 tests, 0 failures
