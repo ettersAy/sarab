@@ -501,3 +501,35 @@ main {
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
+
+/* ── Project cards ───────────────────────────────────────── */
+
+.project-card {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 16px;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: border-color 0.15s;
+}
+
+.project-card:hover { border-color: var(--accent-dim); }
+
+.project-card-header h3 {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 2px;
+}
+
+.project-card-path {
+  font-size: 11px;
+  color: var(--text-dim);
+  font-family: var(--mono);
+}
+
+.project-card-actions { display: flex; gap: 6px; }
+
+.project-meta { display: flex; gap: 12px; flex-wrap: wrap; }

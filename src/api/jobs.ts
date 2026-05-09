@@ -37,7 +37,7 @@ export function createJobsRouter(jobStore: JobStore, logStore: LogStore, queueMa
 
   // Create job
   router.post("/", (req, res) => {
-    const { title, prompt, model, timeoutMs, maxRetries, tags } = req.body;
+    const { title, prompt, model, timeoutMs, maxRetries, tags, projectId, sessionId, sessionMode } = req.body;
     if (!title || typeof title !== "string" || title.trim().length === 0) {
       throw new ValidationError("Title is required");
     }
@@ -54,6 +54,9 @@ export function createJobsRouter(jobStore: JobStore, logStore: LogStore, queueMa
       timeoutMs,
       maxRetries,
       tags,
+      projectId,
+      sessionId,
+      sessionMode,
     });
     res.status(201).json(job);
   });
@@ -68,6 +71,48 @@ export function createJobsRouter(jobStore: JobStore, logStore: LogStore, queueMa
   router.post("/:id/retry", (req, res) => {
     const job = queueManager.retryJob(req.params.id);
     res.json(job);
+  });
+
+  // Edit job
+  router.patch("/:id", (req, res) => {
+    const job = jobStore.get(req.params.id);
+    if (!job) throw new NotFoundError("Job", req.params.id);
+    if (job.status === "running" || job.status === "retrying") {
+      throw new ValidationError("Cannot edit a running job");
+    }
+    const { title, prompt, model, tags, timeoutMs, maxRetries } = req.body;
+    const patch: Record<string, unknown> = {};
+    if (title !== undefined) patch.title = title;
+    if (prompt !== undefined) patch.prompt = prompt;
+    if (model !== undefined) patch.model = model;
+    if (tags !== undefined) patch.tags = tags;
+    if (timeoutMs !== undefined) patch.timeoutMs = timeoutMs;
+    if (maxRetries !== undefined) patch.maxRetries = maxRetries;
+    const updated = jobStore.update(req.params.id, patch);
+    res.json(updated);
+  });
+
+  // Duplicate job
+  router.post("/:id/duplicate", (req, res) => {
+    const original = jobStore.get(req.params.id);
+    if (!original) throw new NotFoundError("Job", req.params.id);
+    const duplicate = jobStore.create({
+      title: `${original.title} (copy)`,
+      prompt: original.prompt,
+      model: original.model,
+      timeoutMs: original.timeoutMs,
+      maxRetries: original.maxRetries,
+      tags: [...original.tags],
+      projectId: original.projectId,
+    });
+    res.status(201).json(duplicate);
+  });
+
+  // Get job detail (with linked info)
+  router.get("/:id/detail", (req, res) => {
+    const job = jobStore.get(req.params.id);
+    if (!job) throw new NotFoundError("Job", req.params.id);
+    res.json({ job, logContent: logStore.read(req.params.id) });
   });
 
   // Delete job

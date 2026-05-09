@@ -7,7 +7,12 @@ import { logger, setLogFile } from "./logger.js";
 import { AppError } from "./errors.js";
 import { JobStore } from "./storage/jobs.js";
 import { LogStore } from "./storage/logs.js";
+import { ProjectStore } from "./storage/projects.js";
+import { SessionStore } from "./storage/sessions.js";
+import { SettingsStore } from "./storage/settings.js";
 import { ClaudeExecutor } from "./executor/claude.js";
+import { DeepSeekExecutor } from "./executor/deepseek.js";
+import type { Executor } from "./executor/types.js";
 import { QueueManager } from "./queue/manager.js";
 import { SSEManager } from "./queue/sse.js";
 import { createApiRouter } from "./api/router.js";
@@ -20,12 +25,17 @@ setLogFile(config.dataDir);
 // Storage
 const jobStore = new JobStore(config.dataDir, config.defaultTimeoutMs, config.defaultMaxRetries);
 const logStore = new LogStore(config.dataDir);
+const projectStore = new ProjectStore(config.dataDir);
+const sessionStore = new SessionStore(config.dataDir);
+const settingsStore = new SettingsStore(config.dataDir);
 
 // Executor
 const executor = new ClaudeExecutor(config.claudeCmd, config.claudeFlags);
+const deepseekApiKey = process.env.ANTHROPIC_AUTH_TOKEN || process.env.DEEPSEEK_API_KEY || "";
+const deepseekExecutor = deepseekApiKey ? new DeepSeekExecutor(deepseekApiKey) : null;
 
 // Queue
-const queueManager = new QueueManager(jobStore, logStore, executor, config.pollIntervalMs);
+const queueManager = new QueueManager(jobStore, logStore, executor, config.pollIntervalMs, sessionStore, projectStore);
 
 // SSE
 const sseManager = new SSEManager(queueManager, jobStore);
@@ -39,7 +49,8 @@ const webDir = join(__dirname, "web");
 app.use(express.static(webDir));
 
 // API routes
-app.use("/api", createApiRouter(jobStore, logStore, queueManager, executor));
+const promptExecutor: Executor = deepseekExecutor ?? executor;
+app.use("/api", createApiRouter(jobStore, logStore, queueManager, executor, projectStore, sessionStore, settingsStore, promptExecutor));
 
 // SSE endpoint
 app.get("/api/events", (req, res) => {

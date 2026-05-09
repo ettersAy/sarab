@@ -2,6 +2,8 @@ export interface ExecutorInput {
   prompt: string;
   model?: string;
   timeoutMs: number;
+  sessionId?: string;
+  cwd?: string;
 }
 
 export interface ExecutorOutput {
@@ -9,6 +11,7 @@ export interface ExecutorOutput {
   stdout: string;
   stderr: string;
   timedOut: boolean;
+  capturedSessionId?: string;
 }
 
 export interface Executor {

@@ -45,6 +45,9 @@ export class JobStore {
       completedAt: null,
       logFile: null,
       tags: input.tags ?? [],
+      projectId: input.projectId,
+      sessionId: input.sessionId,
+      sessionMode: input.sessionMode,
     };
     this.append(job);
     logger.info(`Job created: ${job.id} — "${job.title}"`);

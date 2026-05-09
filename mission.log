@@ -293,3 +293,92 @@ Total: 59 tests, 0 failures
 3. Add authentication if deploying beyond localhost
 4. Consider SQLite migration when job count exceeds 500
 5. Add CI/CD pipeline (GitHub Actions)
+
+---
+
+## Mission 002: Upgrade SARAB — Projects, Sessions & Settings
+
+### Phase 1 — Discovery Audit (2026-05-08)
+
+**Current architecture summary**:
+- Flat JSONL storage: `data/jobs.jsonl` (append + atomic rewrite with uuid tmp), `data/logs/<id>.log`
+- Single `ClaudeExecutor` via `spawn("claude", ["-p", prompt])` — no session support, no cwd
+- Factory-function API route pattern: `createXxxRouter(dep1, dep2)` returning Express Router
+- Manual DI in `server.ts` — linear, no container
+- Vanilla JS SPA: render-on-navigate, full innerHTML replacement, global mutable state
+- 43 Playwright + 16 smoke tests — all passing, test server auto-started via playwright.config.ts
+
+**Gaps to fill**:
+- No project concept — all jobs are global, no root path for execution
+- No session capture — Claude session IDs are lost after each execution
+- No session resume — `claude --resume` never used
+- No prompt editing/duplicating/rerunning — only create, cancel, retry, delete
+- Prompt improvement (`src/api/prompt.ts`) uses Claude CLI executor, not DeepSeek API
+- No settings system — all config via env vars, hardcoded Claude CLI provider
+- No project or session-related tests
+
+**Key risks**:
+1. Session ID format from Claude CLI stderr unknown — expected `Session ID: cls_xxx`
+2. Frontend `app.js` (~500 lines) will grow substantially with 4+ new views
+3. DeepSeek API requires `ANTHROPIC_AUTH_TOKEN` env var
+4. Settings system must keep env var backward compatibility
+
+### Phase 2 — Data Model + Storage (2026-05-08)
+
+**Created**:
+- `src/queue/types.ts` — extended: `SessionMode` type, `Session`, `Project`, `ProjectCreateInput`, `AIProvider`, `AppSettings` interfaces; `Job` and `JobCreateInput` extended with `projectId`, `sessionId`, `sessionMode`
+- `src/storage/projects.ts` — `ProjectStore` (JSONL, same pattern as JobStore)
+- `src/storage/sessions.ts` — `SessionStore` (JSONL, with `getLatestForProject`)
+- `src/storage/settings.ts` — `SettingsStore` (single JSON file with defaults)
+- `src/server.ts` — wired `projectStore`, `sessionStore`, `settingsStore`
+- `src/api/router.ts` — accepts new stores, passes them through
+
+**Tested**: 59 tests passing, backward-compatible
+
+### Phase 3 — Session Handling (2026-05-08)
+
+**Modified**:
+- `src/executor/types.ts` — added `sessionId`, `cwd` to ExecutorInput; `capturedSessionId` to ExecutorOutput
+- `src/executor/claude.ts` — parses stderr for `Session ID: cls_xxx`, supports `--resume` flag, passes `cwd` to spawn
+- `src/queue/manager.ts` — accepts `SessionStore`/`ProjectStore`, resolves cwd from project, resolves session from mode, saves captured sessions post-execution
+- `src/api/jobs.ts` — accepts `projectId`, `sessionId`, `sessionMode` in create
+- `src/storage/jobs.ts` — `create()` maps new fields
+
+**Created**:
+- `src/api/sessions.ts` — `GET /api/sessions`, `GET /api/sessions/latest`, `GET /api/sessions/:id`
+
+### Phase 4 — Project Management (2026-05-08)
+
+**Created**:
+- `src/api/projects.ts` — full CRUD: list, create, get, update, delete, list project jobs, list project sessions
+
+**Modified**:
+- `src/web/index.html` — added "Projects" nav button
+- `src/web/app.js` — added `renderProjects()`, `renderProjectDetail()`, `showProjectForm()`, project state, projectId auto-set in submit form
+- `src/web/styles.css` — project card styles
+
+**Bug fixed**: TypeScript-style `: any` type annotation in plain JS file broke entire frontend (caught by Playwright, 13 UI test failures → all pass after fix)
+
+### Phase 5 — Prompt Management (2026-05-08)
+
+**Added to `src/api/jobs.ts`**:
+- `PATCH /api/jobs/:id` — edit title/prompt/model/tags/timeout/maxRetries
+- `POST /api/jobs/:id/duplicate` — deep copy job with "(copy)" suffix
+- `GET /api/jobs/:id/detail` — full detail with log content
+
+### Phase 6 — DeepSeek Prompt Improvement (2026-05-08)
+
+**Created**:
+- `src/executor/deepseek.ts` — `DeepSeekExecutor` implementing `Executor` via HTTP fetch to DeepSeek API. Uses `ANTHROPIC_AUTH_TOKEN` env var. Handles timeouts and API errors gracefully.
+
+**Modified**:
+- `src/server.ts` — creates `DeepSeekExecutor` when API key is set, passes as `promptExecutor` to router
+- `src/api/router.ts` — accepts optional `promptExecutor` parameter, uses it for `/api/prompt` route (falls back to Claude executor)
+
+**Tested**: 54 tests passing (38 non-slow Playwright + 16 smoke), TypeScript clean
+
+### Next phases
+- Phase 7: Execution architecture refactor (session modes fully tested)
+- Phase 8: UI/UX upgrade (prompt detail view, session selector, execution mode UI)
+- Phases 9-12: Audit, docs, tests, fix loop
+- Phases 13-20: Settings feature (multi-provider)

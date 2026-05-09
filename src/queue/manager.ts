@@ -1,6 +1,8 @@
-import type { Job, JobStatus } from "./types.js";
+import type { Job, JobStatus, SessionMode } from "./types.js";
 import type { JobStore } from "../storage/jobs.js";
 import type { LogStore } from "../storage/logs.js";
+import type { SessionStore } from "../storage/sessions.js";
+import type { ProjectStore } from "../storage/projects.js";
 import type { Executor } from "../executor/types.js";
 import { logger } from "../logger.js";
 import { NotFoundError, ValidationError } from "../errors.js";
@@ -24,6 +26,8 @@ export class QueueManager extends EventEmitter {
     private readonly logStore: LogStore,
     private readonly executor: Executor,
     private readonly pollIntervalMs: number = 5000,
+    private readonly sessionStore?: SessionStore,
+    private readonly projectStore?: ProjectStore,
   ) {
     super();
   }
@@ -148,11 +152,29 @@ export class QueueManager extends EventEmitter {
       ].join("\n");
       this.logStore.write(job.id, attemptHeader);
 
-      const result = await this.executor.execute({
+      const execInput: Parameters<Executor["execute"]>[0] = {
         prompt: job.prompt,
         model: job.model,
         timeoutMs: job.timeoutMs,
-      });
+      };
+
+      // Resolve project cwd
+      if (job.projectId && this.projectStore) {
+        const project = this.projectStore.get(job.projectId);
+        if (project) execInput.cwd = project.rootPath;
+      }
+
+      // Resolve session
+      if (this.sessionStore) {
+        if (job.sessionMode === "resume" && job.sessionId) {
+          execInput.sessionId = job.sessionId;
+        } else if (job.sessionMode === "latest" || (job.sessionMode === "resume" && !job.sessionId)) {
+          const latest = this.sessionStore.getLatestForProject(job.projectId ?? null);
+          if (latest) execInput.sessionId = latest.sessionId;
+        }
+      }
+
+      const result = await this.executor.execute(execInput);
 
       lastOutput = result.stdout + (result.stderr ? "\n[STDERR]\n" + result.stderr : "");
 
@@ -181,6 +203,16 @@ export class QueueManager extends EventEmitter {
           completedAt: new Date().toISOString(),
           logFile: this.logStore.getPath(job.id),
         });
+        // Save captured session
+        if (result.capturedSessionId && this.sessionStore) {
+          this.sessionStore.create({
+            sessionId: result.capturedSessionId,
+            projectId: job.projectId ?? null,
+            jobId: job.id,
+            model: job.model ?? null,
+          });
+        }
+
         const completedJob = this.jobStore.get(job.id)!;
         this.emit("job-completed", { type: "job-completed", job: completedJob });
         logger.info(`Job ${job.id} completed`);

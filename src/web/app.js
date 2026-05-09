@@ -11,6 +11,8 @@ const MODELS = [
 // ── State ───────────────────────────────────────────────────────────
 let currentView = "dashboard";
 let jobs = [];
+let projects = [];
+let currentProjectId = null;
 let stats = { pending: 0, running: 0, completed: 0, failed: 0, cancelled: 0, total: 0 };
 let queueFilter = "all";
 let queueSearch = "";
@@ -99,6 +101,8 @@ function updateView() {
 
 function renderView() {
   if (currentView === "dashboard") renderDashboard();
+  else if (currentView === "projects") renderProjects();
+  else if (currentView === "project-detail") renderProjectDetail();
   else if (currentView === "queue") renderQueue();
   else if (currentView === "submit") renderSubmit();
 }
@@ -131,6 +135,139 @@ function renderDashboard() {
     </div>`;
 
   document.getElementById("btn-refresh")?.addEventListener("click", loadJobs);
+  bindJobActions();
+}
+
+// ── Projects ────────────────────────────────────────────────────────
+async function loadProjects() {
+  try { projects = await api("GET", "/api/projects"); }
+  catch (err) { showToast("Failed to load projects: " + err.message, "error"); }
+}
+
+function renderProjects() {
+  const cards = projects.length
+    ? projects.map((p) => `
+      <div class="project-card" data-id="${p.id}">
+        <div class="project-card-header">
+          <h3>${h(p.name)}</h3>
+          <span class="project-card-path">${h(p.rootPath)}</span>
+        </div>
+        <div class="project-card-actions">
+          <button class="btn btn-sm" data-action="view-project" data-id="${p.id}">View</button>
+          <button class="btn btn-danger btn-sm" data-action="delete-project" data-id="${p.id}">Delete</button>
+        </div>
+      </div>`).join("")
+    : `<div class="empty-state"><div class="empty-icon">&#128193;</div><p>No projects yet.</p></div>`;
+
+  $main.innerHTML = `
+    <div class="view active" id="view-projects">
+      <div class="section-header">
+        <h2>Projects</h2>
+        <div class="queue-controls">
+          <button class="btn btn-sm" id="btn-refresh">Refresh</button>
+          <button class="btn btn-primary btn-sm" id="btn-new-project">New Project</button>
+        </div>
+      </div>
+      ${cards}
+      <div id="project-form" class="hidden" style="margin-top:20px"></div>
+    </div>`;
+
+  document.getElementById("btn-refresh")?.addEventListener("click", async () => {
+    await loadProjects();
+    renderProjects();
+  });
+  document.getElementById("btn-new-project")?.addEventListener("click", showProjectForm);
+  document.querySelectorAll("[data-action=view-project]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      currentProjectId = btn.dataset.id;
+      currentView = "project-detail";
+      renderView();
+    });
+  });
+  document.querySelectorAll("[data-action=delete-project]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      if (!confirm("Delete project " + btn.dataset.id + "?")) return;
+      try { await api("DELETE", `/api/projects/${btn.dataset.id}`); await loadProjects(); renderProjects(); }
+      catch (err) { showToast(err.message, "error"); }
+    });
+  });
+}
+
+function showProjectForm() {
+  const form = document.getElementById("project-form");
+  form.classList.remove("hidden");
+  form.innerHTML = `
+    <div class="form-container">
+      <h3>New Project</h3>
+      <div class="form-group">
+        <label>Project Name</label>
+        <input id="f-project-name" type="text" placeholder="e.g. my-app" required maxlength="100">
+      </div>
+      <div class="form-group">
+        <label>Root Path</label>
+        <input id="f-project-path" type="text" placeholder="e.g. /home/user/projects/my-app" required>
+        <div class="hint">Claude commands will run from this directory.</div>
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary btn-sm" id="btn-create-project">Create</button>
+        <button class="btn btn-sm" id="btn-cancel-project">Cancel</button>
+      </div>
+    </div>`;
+
+  document.getElementById("btn-create-project")?.addEventListener("click", async () => {
+    const name = document.getElementById("f-project-name").value.trim();
+    const rootPath = document.getElementById("f-project-path").value.trim();
+    if (!name || !rootPath) { showToast("Name and root path are required", "error"); return; }
+    try {
+      await api("POST", "/api/projects", { name, rootPath });
+      await loadProjects();
+      renderProjects();
+      showToast("Project created", "success");
+    } catch (err) { showToast(err.message, "error"); }
+  });
+  document.getElementById("btn-cancel-project")?.addEventListener("click", () => {
+    form.classList.add("hidden");
+  });
+}
+
+function renderProjectDetail() {
+  const p = projects.find((x) => x.id === currentProjectId);
+  if (!p) { $main.innerHTML = "<p>Project not found</p>"; return; }
+
+  const projectJobs = jobs.filter((j) => j.projectId === p.id);
+
+  $main.innerHTML = `
+    <div class="view active" id="view-project-detail">
+      <div class="section-header">
+        <h2>${h(p.name)}</h2>
+        <div class="queue-controls">
+          <button class="btn btn-sm" id="btn-back-projects">Back</button>
+          <button class="btn btn-sm" id="btn-new-project-job">New Prompt</button>
+          <button class="btn btn-danger btn-sm" id="btn-delete-proj">Delete Project</button>
+        </div>
+      </div>
+      <div class="project-meta" style="margin-bottom:16px;color:var(--text-dim);font-size:12px">
+        Root: ${h(p.rootPath)} &middot; Created: ${fmtTime(p.createdAt)}
+      </div>
+      <h3 style="margin-bottom:8px">Prompts (${projectJobs.length})</h3>
+      ${renderJobTable(projectJobs)}
+    </div>`;
+
+  document.getElementById("btn-back-projects")?.addEventListener("click", () => {
+    currentView = "projects";
+    renderView();
+  });
+  document.getElementById("btn-new-project-job")?.addEventListener("click", () => {
+    currentView = "submit";
+    document.querySelectorAll(".nav-btn").forEach((b) => b.classList.remove("active"));
+    document.querySelector('[data-view="submit"]')?.classList.add("active");
+    renderView();
+  });
+  document.getElementById("btn-delete-proj")?.addEventListener("click", async () => {
+    if (!confirm("Delete project '" + p.name + "'?")) return;
+    try { await api("DELETE", `/api/projects/${p.id}`); await loadProjects(); currentView = "projects"; renderView(); }
+    catch (err) { showToast(err.message, "error"); }
+  });
   bindJobActions();
 }
 
@@ -360,14 +497,17 @@ async function handleSubmit(e) {
   const tags = tagsRaw ? tagsRaw.split(",").map((t) => t.trim()).filter(Boolean) : [];
 
   try {
-    const job = await api("POST", "/api/jobs", {
+    const body = {
       title: document.getElementById("f-title").value.trim(),
       prompt: document.getElementById("f-prompt").value.trim(),
       model: document.getElementById("f-model").value || undefined,
       timeoutMs: parseInt(document.getElementById("f-timeout").value),
       maxRetries: parseInt(document.getElementById("f-retries").value),
       tags,
-    });
+    };
+    if (currentProjectId) body.projectId = currentProjectId;
+
+    const job = await api("POST", "/api/jobs", body);
     showToast(`Job ${job.id} created`, "success");
     document.getElementById("submit-form")?.reset();
     // Switch to queue to see the new job
